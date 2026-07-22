@@ -1,0 +1,25 @@
+{
+  "name": "agent-rail",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Decentralised AI agent payment settlement DApp (CT124-3-3 Group 7)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "compile": "npm -w packages/contracts run compile",
+    "chain": "npm -w packages/contracts run node",
+    "deploy": "npm -w packages/contracts run deploy",
+    "seed": "npm -w packages/contracts run seed",
+    "indexer": "npm -w packages/indexer run start",
+    "web": "npm -w packages/web run dev",
+    "agent:a": "npm -w packages/agents run start:a",
+    "agent:b": "npm -w packages/agents run start:b",
+    "test": "npm -w packages/contracts run test",
+    "dev": "bash scripts/dev.sh",
+    "demo:reset": "bash scripts/demo-reset.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
