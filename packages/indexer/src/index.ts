@@ -1,10 +1,12 @@
 import "dotenv/config";
 import { createPublicClient, http } from "viem";
 import {
-  addresses,
+  getAddresses,
   JobContractAbi,
   IdentityRegistryAbi,
   ReputationRegistryAbi,
+  CHAIN_ID,
+  CHAIN_NAME,
   RPC_URL,
 } from "@agentrail/shared";
 import { handleJobEvent } from "./handlers/jobEvents.js";
@@ -15,6 +17,10 @@ import { handleRegistryEvent } from "./handlers/registryEvents.js";
 async function main() {
   const client = createPublicClient({ transport: http(RPC_URL) });
 
+  // Throw rather than silently watching the zero address on an undeployed chain.
+  const addresses = getAddresses(CHAIN_ID);
+
+  console.log(`[indexer] ${CHAIN_NAME} (${CHAIN_ID}) via ${RPC_URL}`);
   console.log("[indexer] watching contracts:", addresses);
 
   const unwatchJobs = client.watchContractEvent({

@@ -1,7 +1,39 @@
 // Chain + protocol constants shared across every package.
 
-export const CHAIN_ID = 31337; // Hardhat local
-export const RPC_URL = "http://127.0.0.1:8545";
+export const LOCAL_CHAIN_ID = 31337;
+export const BASE_SEPOLIA_CHAIN_ID = 84532;
+
+export const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+
+/// Chain metadata for logging and explorer links. Local has no explorer.
+export const CHAIN_META: Record<number, { name: string; explorer: string | null }> = {
+  [LOCAL_CHAIN_ID]: { name: "Hardhat local", explorer: null },
+  [BASE_SEPOLIA_CHAIN_ID]: { name: "Base Sepolia", explorer: "https://sepolia.basescan.org" },
+};
+
+// `process` is absent in some bundler targets, and Next.js only inlines
+// NEXT_PUBLIC_* vars for LITERAL `process.env.X` member access — reading them
+// via a variable or dynamic key would silently yield undefined in the browser.
+const hasProcessEnv = typeof process !== "undefined" && typeof process.env === "object";
+
+const rawChainId = hasProcessEnv
+  ? process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID
+  : undefined;
+
+const rawRpcUrl = hasProcessEnv
+  ? process.env.NEXT_PUBLIC_RPC_URL || process.env.RPC_URL
+  : undefined;
+
+const parsedChainId = Number(rawChainId);
+
+/// Active chain. Defaults to local so the demo path needs no configuration.
+export const CHAIN_ID = Number.isInteger(parsedChainId) && parsedChainId > 0
+  ? parsedChainId
+  : LOCAL_CHAIN_ID;
+
+export const RPC_URL = rawRpcUrl || LOCAL_RPC_URL;
+
+export const CHAIN_NAME = CHAIN_META[CHAIN_ID]?.name ?? `chain ${CHAIN_ID}`;
 
 export const USDC_DECIMALS = 6;
 

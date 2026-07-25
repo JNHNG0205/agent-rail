@@ -1,10 +1,16 @@
 import hre from "hardhat";
-import { addresses } from "@agentrail/shared";
+import { getAddresses } from "@agentrail/shared";
 
 /// Seeds a fresh demo: registers Agent A + B in the IdentityRegistry and mints
 /// MockUSDC to both so a hire→settle flow has funds. Run after deploy.
-/// Run with: npm run seed (targets localhost).
+///   npm run seed                 -> localhost (31337)
+///   npm run seed:base-sepolia    -> Base Sepolia (84532)
 async function main() {
+  const publicClient = await hre.viem.getPublicClient();
+  // Resolve against the connected chain, not the active env chain — seeding
+  // must target whatever `--network` was passed.
+  const addresses = getAddresses(await publicClient.getChainId());
+
   const [agentA, agentB] = await hre.viem.getWalletClients();
 
   const usdc = await hre.viem.getContractAt("MockUSDC", addresses.MockUSDC);

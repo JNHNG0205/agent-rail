@@ -34,6 +34,18 @@ export interface Job {
   updatedAt: string | null; // ISO timestamp
 }
 
+/// Deployed address set for one chain. Lives here rather than in addresses.ts
+/// so the generated deployments.ts can import it without a circular reference.
+export interface ContractAddresses {
+  MockUSDC: `0x${string}`;
+  JobContract: `0x${string}`;
+  IdentityRegistry: `0x${string}`;
+  ReputationRegistry: `0x${string}`;
+  EvaluatorModule: `0x${string}`;
+}
+
+export type ContractName = keyof ContractAddresses;
+
 export interface ChainEvent {
   id: number;
   contract: string;
