@@ -10,17 +10,21 @@ Turn the user's goal into a poster brief. Reply with ONE JSON object and nothing
 Write 3 to 5 of them. Each must be objectively checkable by looking at the poster —
 "shows the event date" is checkable, "looks professional" is not.`;
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export function isPosterBrief(value: unknown): value is PosterBrief {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.title === "string" &&
-    typeof v.subtitle === "string" &&
-    typeof v.callToAction === "string" &&
-    typeof v.palette === "string" &&
+    isNonEmptyString(v.title) &&
+    isNonEmptyString(v.subtitle) &&
+    isNonEmptyString(v.callToAction) &&
+    isNonEmptyString(v.palette) &&
     Array.isArray(v.requirements) &&
     v.requirements.length > 0 &&
-    v.requirements.every((r) => typeof r === "string")
+    v.requirements.every(isNonEmptyString)
   );
 }
 

@@ -18,3 +18,35 @@ test("isPosterBrief rejects a malformed object", () => {
   assert.equal(isPosterBrief(null), false);
   assert.equal(isPosterBrief({ title: 1, subtitle: "", callToAction: "", palette: "", requirements: [] }), false);
 });
+
+const VALID_BRIEF = {
+  title: "Demo Day",
+  subtitle: "Autonomous agents",
+  callToAction: "Join us",
+  palette: "terracotta on cream",
+  requirements: ["shows the title"],
+};
+
+test("isPosterBrief accepts a fully-valid brief", () => {
+  assert.equal(isPosterBrief(VALID_BRIEF), true);
+});
+
+test("isPosterBrief rejects an empty requirements array", () => {
+  assert.equal(isPosterBrief({ ...VALID_BRIEF, requirements: [] }), false);
+});
+
+test("isPosterBrief rejects a non-string requirements entry", () => {
+  assert.equal(isPosterBrief({ ...VALID_BRIEF, requirements: [123] }), false);
+});
+
+test("isPosterBrief rejects a whitespace-only requirements entry", () => {
+  assert.equal(isPosterBrief({ ...VALID_BRIEF, requirements: ["  "] }), false);
+});
+
+test("isPosterBrief rejects an empty title", () => {
+  assert.equal(isPosterBrief({ ...VALID_BRIEF, title: "" }), false);
+});
+
+test("isPosterBrief rejects a whitespace-only title", () => {
+  assert.equal(isPosterBrief({ ...VALID_BRIEF, title: "   " }), false);
+});
