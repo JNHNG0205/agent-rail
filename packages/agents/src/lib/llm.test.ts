@@ -23,6 +23,17 @@ function stubFetch(content: string) {
   return () => calls;
 }
 
+function stubFetchOnce(responses: Array<() => Response | Promise<never>>) {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    const respond = responses[calls];
+    calls += 1;
+    if (!respond) throw new Error("stubFetchOnce called more times than expected");
+    return respond();
+  }) as typeof fetch;
+  return () => calls;
+}
+
 test("mock provider returns the mock verbatim without any network call", async () => {
   process.env.LLM_PROVIDER = "mock";
   const calls = stubFetch("SHOULD NOT BE USED");
@@ -79,4 +90,74 @@ test("completeJson throws when the guard rejects twice", async () => {
     () => completeJson({ system: "s", user: "u", mock: { n: 0 } }, isNum),
     /did not match/,
   );
+});
+
+test("openrouter provider retries after a non-ok response and succeeds on the second attempt", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  const calls = stubFetchOnce([
+    () => new Response("", { status: 500, statusText: "Internal Server Error" }),
+    () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: "recovered" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+  ]);
+  const out = await complete({ system: "s", user: "u", mock: "unused" });
+  assert.equal(out, "recovered");
+  assert.equal(calls(), 2);
+});
+
+test("openrouter provider retries when the response has no content and succeeds on the second attempt", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  const calls = stubFetchOnce([
+    () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: "" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: "recovered" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+  ]);
+  const out = await complete({ system: "s", user: "u", mock: "unused" });
+  assert.equal(out, "recovered");
+  assert.equal(calls(), 2);
+});
+
+test("openrouter provider throws a named error after two consecutive non-ok responses", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response("", { status: 500, statusText: "Internal Server Error" });
+  }) as typeof fetch;
+  await assert.rejects(
+    () => complete({ system: "s", user: "u", mock: "unused" }),
+    /failed after 2 attempts/,
+  );
+  assert.equal(calls, 2);
+});
+
+test("openrouter provider catches a rejecting fetch, retries, and throws after the second attempt", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    throw new Error("network down");
+  }) as typeof fetch;
+  await assert.rejects(
+    () => complete({ system: "s", user: "u", mock: "unused" }),
+    /failed after 2 attempts: network down/,
+  );
+  assert.equal(calls, 2);
 });
