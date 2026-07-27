@@ -12,12 +12,15 @@ interface IJobContract {
     struct Job {
         address client;
         address provider;
+        address evaluator;
         uint256 amount;
         JobState state;
         bytes32 deliverableHash;
     }
 
-    function createJob(address provider, uint256 amount) external returns (uint256 jobId);
+    event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, address evaluator, uint256 amount);
+
+    function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId);
     function fundJob(uint256 jobId) external;
     function submitDeliverable(uint256 jobId, bytes32 deliverableHash) external;
     function settle(uint256 jobId) external;

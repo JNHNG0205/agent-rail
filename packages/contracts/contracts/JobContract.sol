@@ -20,6 +20,7 @@ contract JobContract {
     struct Job {
         address client;
         address provider;
+        address evaluator;
         uint256 amount; // USDC, 6 decimals
         JobState state;
         bytes32 deliverableHash;
@@ -31,7 +32,7 @@ contract JobContract {
     mapping(uint256 => Job) public jobs;
     uint256 public nextJobId;
 
-    event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, uint256 amount);
+    event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, address evaluator, uint256 amount);
     event JobFunded(uint256 indexed jobId, uint256 amount);
     event DeliverableSubmitted(uint256 indexed jobId, bytes32 deliverableHash);
     event JobCompleted(uint256 indexed jobId, address indexed provider, uint256 amount);
@@ -41,8 +42,8 @@ contract JobContract {
         usdc = IERC20(usdc_);
     }
 
-    /// @notice Client opens a job targeting a specific provider.
-    function createJob(address provider, uint256 amount) external returns (uint256 jobId) {
+    /// @notice Client opens a job targeting a specific provider and evaluator.
+    function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId) {
         // TODO(M1): allocate jobId, store Open job, emit JobCreated.
         revert("TODO(M1): createJob");
     }
