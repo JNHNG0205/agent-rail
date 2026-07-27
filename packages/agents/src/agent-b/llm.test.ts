@@ -1,4 +1,4 @@
-import { test, beforeEach } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import type { PosterBrief } from "@agentrail/shared";
 import { runTask } from "./llm.js";
@@ -11,9 +11,26 @@ const BRIEF: PosterBrief = {
   requirements: ["shows the title", "shows the call to action"],
 };
 
+const realFetch = globalThis.fetch;
+
 beforeEach(() => {
   process.env.LLM_PROVIDER = "mock";
 });
+
+afterEach(() => {
+  globalThis.fetch = realFetch;
+  delete process.env.LLM_PROVIDER;
+  delete process.env.LLM_API_KEY;
+  delete process.env.LLM_MODEL;
+});
+
+function stubFetch(content: string) {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
+}
 
 test("returns SVG source", async () => {
   const svg = await runTask(BRIEF);
@@ -24,4 +41,27 @@ test("returns SVG source", async () => {
 test("mock poster includes the brief title so review can pass end to end", async () => {
   const svg = await runTask(BRIEF);
   assert.ok(svg.includes(BRIEF.title));
+});
+
+test("mock poster escapes XML special characters in the brief title", async () => {
+  const brief: PosterBrief = { ...BRIEF, title: "Rock & Roll < Jazz" };
+  const svg = await runTask(brief);
+  assert.ok(svg.includes("Rock &amp; Roll &lt; Jazz"));
+  assert.ok(!svg.includes("Rock & Roll < Jazz"));
+});
+
+test("rejects a provider response with trailing content after </svg>", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  stubFetch("<svg></svg><script>x</script>");
+  await assert.rejects(() => runTask(BRIEF), /non-SVG/);
+});
+
+test("rejects a prose provider response with no SVG at all", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  stubFetch("Sorry, I can't help with that request.");
+  await assert.rejects(() => runTask(BRIEF), /non-SVG/);
 });

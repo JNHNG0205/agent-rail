@@ -21,12 +21,20 @@ function renderBrief(brief: PosterBrief): string {
   ].join("\n");
 }
 
+/// Escape `&` first so entities introduced by this pass aren't re-escaped.
+function escapeXml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function mockPoster(brief: PosterBrief): string {
+  const title = escapeXml(brief.title);
+  const subtitle = escapeXml(brief.subtitle);
+  const callToAction = escapeXml(brief.callToAction);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
   <rect width="600" height="800" fill="#F4F1EA"/>
-  <text x="300" y="300" text-anchor="middle" font-family="Georgia" font-size="44" fill="#9C4722">${brief.title}</text>
-  <text x="300" y="360" text-anchor="middle" font-family="Georgia" font-size="24" fill="#3A3A3A">${brief.subtitle}</text>
-  <text x="300" y="620" text-anchor="middle" font-family="Georgia" font-size="28" fill="#9C4722">${brief.callToAction}</text>
+  <text x="300" y="300" text-anchor="middle" font-family="Georgia" font-size="44" fill="#9C4722">${title}</text>
+  <text x="300" y="360" text-anchor="middle" font-family="Georgia" font-size="24" fill="#3A3A3A">${subtitle}</text>
+  <text x="300" y="620" text-anchor="middle" font-family="Georgia" font-size="28" fill="#9C4722">${callToAction}</text>
 </svg>`;
 }
 
@@ -40,7 +48,7 @@ export async function runTask(brief: PosterBrief): Promise<string> {
   });
 
   const svg = stripFences(raw);
-  if (!svg.startsWith("<svg") || !svg.includes("</svg>")) {
+  if (!svg.startsWith("<svg") || !svg.endsWith("</svg>")) {
     throw new Error(`provider returned non-SVG content: ${svg.slice(0, 80)}`);
   }
   return svg;
