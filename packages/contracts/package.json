@@ -5,22 +5,15 @@
   "scripts": {
     "compile": "hardhat compile",
     "node": "hardhat node",
-    "deploy": "hardhat run scripts/deploy.ts --network localhost",
-    "deploy:base-sepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
-    "seed": "hardhat run scripts/seed.ts --network localhost",
-    "seed:base-sepolia": "hardhat run scripts/seed.ts --network baseSepolia",
-    "verify:base-sepolia": "hardhat verify --network baseSepolia",
+    "deploy": "hardhat run scripts/deploy.js --network localhost",
     "test": "hardhat test"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
-    "@types/node": "^20.11.0",
-    "dotenv": "^16.4.0",
-    "hardhat": "^2.22.0",
-    "typescript": "^5.4.0"
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.0"
   },
   "dependencies": {
-    "@agentrail/shared": "*",
-    "@openzeppelin/contracts": "^5.0.0"
+    "@openzeppelin/contracts": "^5.0.2"
   }
 }
