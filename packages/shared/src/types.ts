@@ -46,6 +46,24 @@ export interface ContractAddresses {
 
 export type ContractName = keyof ContractAddresses;
 
+/// Poster commission terms. Travels inside Agent B's 402 quote, so it must live
+/// in shared — it crosses the HTTP boundary between agents.
+export interface PosterBrief {
+  title: string;
+  subtitle: string;
+  callToAction: string;
+  palette: string;
+  requirements: string[];
+}
+
+/// Agent C's verdict. `reason` is populated on approval and rejection alike.
+export interface DeliverableReview {
+  approve: boolean;
+  reason: string;
+  presentElements: string[];
+  missingElements: string[];
+}
+
 export interface ChainEvent {
   id: number;
   contract: string;

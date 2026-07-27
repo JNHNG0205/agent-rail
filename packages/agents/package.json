@@ -6,7 +6,8 @@
   "scripts": {
     "start:a": "tsx src/agent-a/index.ts",
     "start:b": "tsx src/agent-b/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@agentrail/shared": "*",
