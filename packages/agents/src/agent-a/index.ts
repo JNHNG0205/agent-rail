@@ -10,7 +10,12 @@ async function main() {
   const agentBUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
 
   const brief = await composeBrief(GOAL);
-  console.log("[agent-a] brief:", brief.title, `(${brief.requirements.length} requirements)`);
+  console.log(
+    "[agent-a] brief:",
+    brief.title,
+    `(${brief.requirements.length} requirements)`,
+    `provider=${agentBUrl}`,
+  );
 
   // TODO(M4): blocked on M1 — createJob/fundJob revert until JobContract is implemented.
   void hire;

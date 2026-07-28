@@ -30,9 +30,13 @@ test("approves when the hash matches", async () => {
 });
 
 test("rejects on hash mismatch without calling the LLM", async () => {
-  let called = false;
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "test-key";
+  process.env.LLM_MODEL = "test-model";
+
+  let callCount = 0;
   globalThis.fetch = (async () => {
-    called = true;
+    callCount += 1;
     throw new Error("network should not be reached");
   }) as typeof fetch;
 
@@ -41,5 +45,5 @@ test("rejects on hash mismatch without calling the LLM", async () => {
 
   assert.equal(result.approve, false);
   assert.match(result.reason, /hash/i);
-  assert.equal(called, false, "the deterministic gate must short-circuit before any LLM call");
+  assert.equal(callCount, 0, "the deterministic gate must short-circuit before any LLM call");
 });
