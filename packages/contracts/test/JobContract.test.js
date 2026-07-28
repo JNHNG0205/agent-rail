@@ -223,4 +223,58 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
         .withArgs(jobId, 3, 0);
     });
   });
+
+  describe("Timeout Fallback (claimTimeout)", function () {
+    let jobId;
+    const CUSTOM_TIMEOUT = 20;
+
+    beforeEach(async function () {
+      await jobContract
+        .connect(client)
+        ["createJob(address,address,uint256,uint256)"](provider.address, evaluator.address, JOB_AMOUNT, CUSTOM_TIMEOUT);
+      jobId = 0;
+
+      await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(client).fundJob(jobId);
+      await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
+    });
+
+    it("Should set job.deadline upon deliverable submission", async function () {
+      const job = await jobContract.getJob(jobId);
+      expect(job.timeoutBlocks).to.equal(CUSTOM_TIMEOUT);
+      expect(job.deadline).to.be.gt(0);
+    });
+
+    it("Should revert claimTimeout if deadline has not been reached yet", async function () {
+      await expect(jobContract.connect(provider).claimTimeout(jobId))
+        .to.be.revertedWithCustomError(jobContract, "TimeoutNotReached");
+    });
+
+    it("Should revert claimTimeout if caller is not the provider", async function () {
+      await ethers.provider.send("hardhat_mine", [ethers.toBeHex(30)]);
+
+      await expect(jobContract.connect(stranger).claimTimeout(jobId))
+        .to.be.revertedWithCustomError(jobContract, "Unauthorized")
+        .withArgs(stranger.address);
+    });
+
+    it("Should allow provider to claim timeout funds after deadline expires", async function () {
+      const providerInitialBalance = await mockUSDC.balanceOf(provider.address);
+
+      // Advance 30 blocks beyond deadline
+      await ethers.provider.send("hardhat_mine", [ethers.toBeHex(30)]);
+
+      await expect(jobContract.connect(provider).claimTimeout(jobId))
+        .to.emit(jobContract, "JobTimeoutClaimed")
+        .withArgs(jobId, provider.address, JOB_AMOUNT)
+        .and.to.emit(jobContract, "JobCompleted")
+        .withArgs(jobId, provider.address, JOB_AMOUNT);
+
+      const job = await jobContract.getJob(jobId);
+      expect(job.state).to.equal(3); // JobState.Terminal
+
+      const providerFinalBalance = await mockUSDC.balanceOf(provider.address);
+      expect(providerFinalBalance - providerInitialBalance).to.equal(JOB_AMOUNT);
+    });
+  });
 });

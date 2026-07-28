@@ -8,7 +8,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 ///         deliverable hash, and settlement releases (or refunds) the escrow.
 ///         The chain is the source of truth for job state. Member 1.
 contract JobContract {
-    /// @dev Terminal covers both Completed (paid) and Cancelled (refunded);
+    uint256 public constant DEFAULT_TIMEOUT_BLOCKS = 100;
+
+    /// @dev Terminal covers both Completed (paid), Cancelled (refunded), and TimeoutClaimed;
     ///      distinguish via the emitted event, not extra enum members.
     enum JobState {
         Open,
@@ -24,6 +26,8 @@ contract JobContract {
         uint256 amount; // USDC, 6 decimals
         JobState state;
         bytes32 deliverableHash;
+        uint256 timeoutBlocks;
+        uint256 deadline;
     }
 
     IERC20 public immutable usdc;
@@ -36,12 +40,14 @@ contract JobContract {
     error ZeroAmount();
     error InvalidState(uint256 jobId, JobState current, JobState expected);
     error Unauthorized(address caller);
+    error TimeoutNotReached(uint256 currentBlock, uint256 deadline);
 
     event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, address evaluator, uint256 amount);
     event JobFunded(uint256 indexed jobId, uint256 amount);
     event DeliverableSubmitted(uint256 indexed jobId, bytes32 deliverableHash);
     event JobCompleted(uint256 indexed jobId, address indexed provider, uint256 amount);
     event JobCancelled(uint256 indexed jobId, address indexed client, uint256 refund);
+    event JobTimeoutClaimed(uint256 indexed jobId, address indexed provider, uint256 amount);
 
     modifier inState(uint256 jobId, JobState expectedState) {
         if (jobs[jobId].state != expectedState) {
@@ -76,10 +82,17 @@ contract JobContract {
         usdc = IERC20(usdc_);
     }
 
-    /// @notice Client opens a job targeting a specific provider and evaluator.
+    /// @notice Client opens a job targeting a specific provider and evaluator with default timeout.
     function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId) {
+        return createJob(provider, evaluator, amount, DEFAULT_TIMEOUT_BLOCKS);
+    }
+
+    /// @notice Client opens a job with a custom timeout (in blocks).
+    function createJob(address provider, address evaluator, uint256 amount, uint256 timeoutBlocks) public returns (uint256 jobId) {
         if (provider == address(0) || evaluator == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+
+        uint256 effectiveTimeout = timeoutBlocks == 0 ? DEFAULT_TIMEOUT_BLOCKS : timeoutBlocks;
 
         jobId = nextJobId++;
         jobs[jobId] = Job({
@@ -88,7 +101,9 @@ contract JobContract {
             evaluator: evaluator,
             amount: amount,
             state: JobState.Open,
-            deliverableHash: bytes32(0)
+            deliverableHash: bytes32(0),
+            timeoutBlocks: effectiveTimeout,
+            deadline: 0
         });
 
         emit JobCreated(jobId, msg.sender, provider, evaluator, amount);
@@ -105,12 +120,13 @@ contract JobContract {
         emit JobFunded(jobId, job.amount);
     }
 
-    /// @notice Provider submits the keccak256 hash of the deliverable.
+    /// @notice Provider submits the keccak256 hash of the deliverable and starts the timeout clock.
     function submitDeliverable(uint256 jobId, bytes32 deliverableHash) external inState(jobId, JobState.Funded) onlyProvider(jobId) {
         require(deliverableHash != bytes32(0), "Invalid deliverable hash");
 
         Job storage job = jobs[jobId];
         job.deliverableHash = deliverableHash;
+        job.deadline = block.number + job.timeoutBlocks;
         job.state = JobState.Submitted;
 
         emit DeliverableSubmitted(jobId, deliverableHash);
@@ -125,6 +141,23 @@ contract JobContract {
         bool success = usdc.transfer(job.provider, job.amount);
         require(success, "USDC transfer failed");
 
+        emit JobCompleted(jobId, job.provider, job.amount);
+    }
+
+    /// @notice Automatic fallback: Provider claims escrowed funds if evaluator fails to settle before deadline.
+    function claimTimeout(uint256 jobId) external inState(jobId, JobState.Submitted) onlyProvider(jobId) {
+        Job storage job = jobs[jobId];
+
+        if (block.number <= job.deadline) {
+            revert TimeoutNotReached(block.number, job.deadline);
+        }
+
+        job.state = JobState.Terminal;
+
+        bool success = usdc.transfer(job.provider, job.amount);
+        require(success, "USDC transfer failed");
+
+        emit JobTimeoutClaimed(jobId, job.provider, job.amount);
         emit JobCompleted(jobId, job.provider, job.amount);
     }
 
