@@ -27,6 +27,7 @@ export interface Job {
   id: number; // on-chain job id
   client: `0x${string}`;
   provider: `0x${string}`;
+  evaluator: `0x${string}`; // signs the approval that settles the job
   amount: bigint; // USDC minor units (6 decimals)
   state: JobState;
   deliverableHash: `0x${string}` | null;
