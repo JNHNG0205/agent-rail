@@ -16,6 +16,7 @@
     "agent:a": "npm -w packages/agents run start:a",
     "agent:b": "npm -w packages/agents run start:b",
     "test": "npm -w packages/contracts run test",
+    "coverage": "npm -w packages/contracts run coverage",
     "dev": "bash scripts/dev.sh",
     "demo:reset": "bash scripts/demo-reset.sh"
   },

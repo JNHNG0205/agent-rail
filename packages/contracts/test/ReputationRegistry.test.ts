@@ -29,7 +29,7 @@ describe("ReputationRegistry (Viem)", function () {
 
     await reputationRegistry.write.setJobContract([jobContractSim.account.address]);
 
-    expect((await reputationRegistry.read.jobContract()).toLowerCase()).to.equal(
+    expect(((await reputationRegistry.read.jobContract()) as string).toLowerCase()).to.equal(
       jobContractSim.account.address.toLowerCase()
     );
   });
@@ -60,5 +60,39 @@ describe("ReputationRegistry (Viem)", function () {
     await expect(reputationRegistry.write.recordCompletion([agent.account.address])).to.be.rejectedWith(
       "ReputationRegistry: caller is not authorized JobContract"
     );
+  });
+
+  it("should revert setJobContract if zero address passed or called by non-owner", async function () {
+    const { reputationRegistry, agent } = await deployFixture();
+
+    await expect(
+      reputationRegistry.write.setJobContract(["0x0000000000000000000000000000000000000000"])
+    ).to.be.rejectedWith("ReputationRegistry: invalid JobContract address");
+
+    const repAsNonOwner = await hre.viem.getContractAt(
+      "ReputationRegistry",
+      reputationRegistry.address,
+      { client: { wallet: agent } }
+    );
+
+    await expect(
+      repAsNonOwner.write.setJobContract([agent.account.address])
+    ).to.be.rejectedWith("OwnableUnauthorizedAccount");
+  });
+
+  it("should revert recordCompletion if zero address agent passed", async function () {
+    const { reputationRegistry, jobContractSim } = await deployFixture();
+
+    await reputationRegistry.write.setJobContract([jobContractSim.account.address]);
+
+    const repAsJobContract = await hre.viem.getContractAt(
+      "ReputationRegistry",
+      reputationRegistry.address,
+      { client: { wallet: jobContractSim } }
+    );
+
+    await expect(
+      repAsJobContract.write.recordCompletion(["0x0000000000000000000000000000000000000000"])
+    ).to.be.rejectedWith("ReputationRegistry: invalid agent address");
   });
 });

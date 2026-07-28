@@ -15,7 +15,7 @@ describe("IdentityRegistry (Viem)", function () {
 
     expect(await identityRegistry.read.isRegistered([agent1.account.address])).to.equal(true);
     expect(await identityRegistry.read.getAgentId([agent1.account.address])).to.equal(0n);
-    expect((await identityRegistry.read.getAgentAddress([0n])).toLowerCase()).to.equal(
+    expect(((await identityRegistry.read.getAgentAddress([0n])) as string).toLowerCase()).to.equal(
       agent1.account.address.toLowerCase()
     );
   });
@@ -27,7 +27,7 @@ describe("IdentityRegistry (Viem)", function () {
     await identityRegistry.write.registerAgent([agent2.account.address]);
 
     expect(await identityRegistry.read.getAgentId([agent2.account.address])).to.equal(1n);
-    expect((await identityRegistry.read.getAgentAddress([1n])).toLowerCase()).to.equal(
+    expect(((await identityRegistry.read.getAgentAddress([1n])) as string).toLowerCase()).to.equal(
       agent2.account.address.toLowerCase()
     );
   });
@@ -47,5 +47,13 @@ describe("IdentityRegistry (Viem)", function () {
     await expect(identityRegistry.read.getAgentId([agent1.account.address])).to.be.rejectedWith(
       "IdentityRegistry: agent not registered"
     );
+  });
+
+  it("should revert if registering zero address agent", async function () {
+    const { identityRegistry } = await deployFixture();
+
+    await expect(
+      identityRegistry.write.registerAgent(["0x0000000000000000000000000000000000000000"])
+    ).to.be.rejectedWith("IdentityRegistry: invalid agent address");
   });
 });

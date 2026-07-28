@@ -2,6 +2,17 @@ import { expect } from "chai";
 import hre from "hardhat";
 import { keccak256, encodePacked, parseUnits, toBytes } from "viem";
 
+type JobStruct = {
+  client: string;
+  provider: string;
+  evaluator: string;
+  amount: bigint;
+  state: number;
+  deliverableHash: string;
+  timeoutBlocks: bigint;
+  deadline: bigint;
+};
+
 describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", function () {
   const JOB_AMOUNT = parseUnits("100", 6); // 100 USDC
   const DELIVERABLE_TEXT = "AI Task Completion Report - Summary Data";
@@ -65,7 +76,7 @@ describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", func
     ]);
 
     const jobId = 0n;
-    let job = await jobContract.read.getJob([jobId]);
+    let job = (await jobContract.read.getJob([jobId])) as JobStruct;
     expect(job.client.toLowerCase()).to.equal(clientAgent.account.address.toLowerCase());
     expect(job.provider.toLowerCase()).to.equal(providerAgent.account.address.toLowerCase());
     expect(job.evaluator.toLowerCase()).to.equal(evaluatorAgent.account.address.toLowerCase());
@@ -77,7 +88,7 @@ describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", func
     await usdcAsClient.write.approve([jobContract.address, JOB_AMOUNT]);
     await jobAsClient.write.fundJob([jobId]);
 
-    job = await jobContract.read.getJob([jobId]);
+    job = (await jobContract.read.getJob([jobId])) as JobStruct;
     expect(job.state).to.equal(1); // JobState.Funded
     expect(await mockUSDC.read.balanceOf([jobContract.address])).to.equal(JOB_AMOUNT);
 
@@ -86,7 +97,7 @@ describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", func
     // -------------------------------------------------------------
     await jobAsProvider.write.submitDeliverable([jobId, DELIVERABLE_HASH]);
 
-    job = await jobContract.read.getJob([jobId]);
+    job = (await jobContract.read.getJob([jobId])) as JobStruct;
     expect(job.state).to.equal(2); // JobState.Submitted
     expect(job.deliverableHash).to.equal(DELIVERABLE_HASH);
 
@@ -104,7 +115,7 @@ describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", func
     // -------------------------------------------------------------
     // Step 6: Submit Signature to EvaluatorModule -> JobContract -> ReputationRegistry
     // -------------------------------------------------------------
-    const providerBalanceBefore = await mockUSDC.read.balanceOf([providerAgent.account.address]);
+    const providerBalanceBefore = (await mockUSDC.read.balanceOf([providerAgent.account.address])) as bigint;
 
     await evaluatorModule.write.submitApproval([jobId, DELIVERABLE_HASH, true, signature]);
 
@@ -112,11 +123,11 @@ describe("AgentRail - End-to-End Multi-Contract System Integration (Viem)", func
     // Step 7: Verify Final State Across All Contracts
     // -------------------------------------------------------------
     // JobContract state is Terminal
-    job = await jobContract.read.getJob([jobId]);
+    job = (await jobContract.read.getJob([jobId])) as JobStruct;
     expect(job.state).to.equal(3); // JobState.Terminal
 
     // Escrow emptied and USDC paid to Provider
-    const providerBalanceAfter = await mockUSDC.read.balanceOf([providerAgent.account.address]);
+    const providerBalanceAfter = (await mockUSDC.read.balanceOf([providerAgent.account.address])) as bigint;
     expect(providerBalanceAfter - providerBalanceBefore).to.equal(JOB_AMOUNT);
     expect(await mockUSDC.read.balanceOf([jobContract.address])).to.equal(0n);
 
