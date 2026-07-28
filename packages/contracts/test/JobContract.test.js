@@ -222,6 +222,29 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
         .to.be.revertedWithCustomError(jobContract, "InvalidState")
         .withArgs(jobId, 3, 0);
     });
+
+    it("Should revert cancel if caller is neither client nor evaluator", async function () {
+      await expect(jobContract.connect(stranger).cancel(jobId))
+        .to.be.revertedWithCustomError(jobContract, "Unauthorized")
+        .withArgs(stranger.address);
+    });
+
+    it("Should revert submitDeliverable if deliverableHash is zero bytes", async function () {
+      await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(client).fundJob(jobId);
+
+      await expect(jobContract.connect(provider).submitDeliverable(jobId, ethers.ZeroHash))
+        .to.be.revertedWith("Invalid deliverable hash");
+    });
+
+    it("Should fallback to DEFAULT_TIMEOUT_BLOCKS if timeoutBlocks parameter is 0", async function () {
+      const tx = await jobContract
+        .connect(client)
+        ["createJob(address,address,uint256,uint256)"](provider.address, evaluator.address, JOB_AMOUNT, 0);
+      await tx.wait();
+      const job = await jobContract.getJob(1);
+      expect(job.timeoutBlocks).to.equal(100);
+    });
   });
 
   describe("Timeout Fallback (claimTimeout)", function () {
