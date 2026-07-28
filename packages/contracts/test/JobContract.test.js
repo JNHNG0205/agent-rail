@@ -185,6 +185,44 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
         .to.emit(jobContract, "JobCancelled")
         .withArgs(jobId, client.address, JOB_AMOUNT);
     });
+
+    it("Should revert if client attempts to cancel a Submitted job directly", async function () {
+      await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(client).fundJob(jobId);
+      await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
+
+      await expect(jobContract.connect(client).cancel(jobId))
+        .to.be.revertedWithCustomError(jobContract, "Unauthorized")
+        .withArgs(client.address);
+    });
+
+    it("Should revert if evaluator attempts to cancel a Submitted job directly", async function () {
+      await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(client).fundJob(jobId);
+      await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
+
+      await expect(jobContract.connect(evaluator).cancel(jobId))
+        .to.be.revertedWithCustomError(jobContract, "Unauthorized")
+        .withArgs(evaluator.address);
+    });
+
+    it("Should allow evaluatorModule to cancel a Submitted job and refund client", async function () {
+      await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(client).fundJob(jobId);
+      await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
+
+      const clientBalanceBefore = await mockUSDC.balanceOf(client.address);
+
+      await expect(jobContract.connect(evaluatorModuleSim).cancel(jobId))
+        .to.emit(jobContract, "JobCancelled")
+        .withArgs(jobId, client.address, JOB_AMOUNT);
+
+      const clientBalanceAfter = await mockUSDC.balanceOf(client.address);
+      expect(clientBalanceAfter - clientBalanceBefore).to.equal(JOB_AMOUNT);
+
+      const job = await jobContract.getJob(jobId);
+      expect(job.state).to.equal(3); // JobState.Terminal
+    });
   });
 
   describe("Access Control & State Machine Enforcement", function () {

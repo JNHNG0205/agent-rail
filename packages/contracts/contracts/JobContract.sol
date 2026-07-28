@@ -203,12 +203,13 @@ contract JobContract {
         Job storage job = jobs[jobId];
         JobState oldState = job.state;
 
-        if (oldState != JobState.Open && oldState != JobState.Funded && oldState != JobState.Submitted) {
+        if (oldState == JobState.Submitted) {
+            // Once work is delivered, only a verified evaluator decision (via EvaluatorModule) can cancel.
+            if (msg.sender != evaluatorModule) revert Unauthorized(msg.sender);
+        } else if (oldState == JobState.Open || oldState == JobState.Funded) {
+            if (msg.sender != job.client && msg.sender != job.evaluator) revert Unauthorized(msg.sender);
+        } else {
             revert InvalidState(jobId, oldState, JobState.Open);
-        }
-
-        if (msg.sender != job.client && msg.sender != job.evaluator && msg.sender != evaluatorModule) {
-            revert Unauthorized(msg.sender);
         }
 
         job.state = JobState.Terminal;
