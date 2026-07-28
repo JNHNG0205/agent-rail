@@ -32,45 +32,125 @@ contract JobContract {
     mapping(uint256 => Job) public jobs;
     uint256 public nextJobId;
 
+    error ZeroAddress();
+    error ZeroAmount();
+    error InvalidState(uint256 jobId, JobState current, JobState expected);
+    error Unauthorized(address caller);
+
     event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, address evaluator, uint256 amount);
     event JobFunded(uint256 indexed jobId, uint256 amount);
     event DeliverableSubmitted(uint256 indexed jobId, bytes32 deliverableHash);
     event JobCompleted(uint256 indexed jobId, address indexed provider, uint256 amount);
     event JobCancelled(uint256 indexed jobId, address indexed client, uint256 refund);
 
+    modifier inState(uint256 jobId, JobState expectedState) {
+        if (jobs[jobId].state != expectedState) {
+            revert InvalidState(jobId, jobs[jobId].state, expectedState);
+        }
+        _;
+    }
+
+    modifier onlyClient(uint256 jobId) {
+        if (msg.sender != jobs[jobId].client) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
+
+    modifier onlyProvider(uint256 jobId) {
+        if (msg.sender != jobs[jobId].provider) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
+
+    modifier onlyEvaluator(uint256 jobId) {
+        if (msg.sender != jobs[jobId].evaluator) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
+
     constructor(address usdc_) {
+        if (usdc_ == address(0)) revert ZeroAddress();
         usdc = IERC20(usdc_);
     }
 
     /// @notice Client opens a job targeting a specific provider and evaluator.
     function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId) {
-        // TODO(M1): allocate jobId, store Open job, emit JobCreated.
-        revert("TODO(M1): createJob");
+        if (provider == address(0) || evaluator == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        jobId = nextJobId++;
+        jobs[jobId] = Job({
+            client: msg.sender,
+            provider: provider,
+            evaluator: evaluator,
+            amount: amount,
+            state: JobState.Open,
+            deliverableHash: bytes32(0)
+        });
+
+        emit JobCreated(jobId, msg.sender, provider, evaluator, amount);
     }
 
     /// @notice Client escrows `amount` USDC for an open job (requires prior approve).
-    function fundJob(uint256 jobId) external {
-        // TODO(M1): pull USDC into escrow, move Open -> Funded, emit JobFunded.
-        revert("TODO(M1): fundJob");
+    function fundJob(uint256 jobId) external inState(jobId, JobState.Open) onlyClient(jobId) {
+        Job storage job = jobs[jobId];
+        job.state = JobState.Funded;
+
+        bool success = usdc.transferFrom(msg.sender, address(this), job.amount);
+        require(success, "USDC transfer failed");
+
+        emit JobFunded(jobId, job.amount);
     }
 
     /// @notice Provider submits the keccak256 hash of the deliverable.
-    function submitDeliverable(uint256 jobId, bytes32 deliverableHash) external {
-        // TODO(M1): move Funded -> Submitted, store hash, emit DeliverableSubmitted.
-        revert("TODO(M1): submitDeliverable");
+    function submitDeliverable(uint256 jobId, bytes32 deliverableHash) external inState(jobId, JobState.Funded) onlyProvider(jobId) {
+        require(deliverableHash != bytes32(0), "Invalid deliverable hash");
+
+        Job storage job = jobs[jobId];
+        job.deliverableHash = deliverableHash;
+        job.state = JobState.Submitted;
+
+        emit DeliverableSubmitted(jobId, deliverableHash);
     }
 
     /// @notice Release escrow to the provider once an approval is verified.
     /// @dev Called after EvaluatorModule verifies the client's signed approval.
-    function settle(uint256 jobId) external {
-        // TODO(M1/M2): move Submitted -> Terminal, transfer escrow, emit JobCompleted.
-        revert("TODO(M1): settle");
+    function settle(uint256 jobId) external inState(jobId, JobState.Submitted) onlyEvaluator(jobId) {
+        Job storage job = jobs[jobId];
+        job.state = JobState.Terminal;
+
+        bool success = usdc.transfer(job.provider, job.amount);
+        require(success, "USDC transfer failed");
+
+        emit JobCompleted(jobId, job.provider, job.amount);
     }
 
     /// @notice Refund the client for a job that never completed.
     function cancel(uint256 jobId) external {
-        // TODO(M1): guard state, refund escrow, move -> Terminal, emit JobCancelled.
-        revert("TODO(M1): cancel");
+        Job storage job = jobs[jobId];
+        JobState oldState = job.state;
+
+        if (oldState != JobState.Open && oldState != JobState.Funded) {
+            revert InvalidState(jobId, oldState, JobState.Open);
+        }
+
+        if (msg.sender != job.client && msg.sender != job.evaluator) {
+            revert Unauthorized(msg.sender);
+        }
+
+        job.state = JobState.Terminal;
+        uint256 refundAmount = 0;
+
+        if (oldState == JobState.Funded) {
+            refundAmount = job.amount;
+            bool success = usdc.transfer(job.client, refundAmount);
+            require(success, "USDC transfer failed");
+        }
+
+        emit JobCancelled(jobId, job.client, refundAmount);
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {
