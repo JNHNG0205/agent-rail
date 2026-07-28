@@ -1,8 +1,8 @@
-require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config();
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox-viem";
+import "dotenv/config";
 
-/** @type import('hardhat/config').HardhatUserConfig */
-module.exports = {
+const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
@@ -30,3 +30,5 @@ module.exports = {
     hardhat: {},
   },
 };
+
+export default config;
