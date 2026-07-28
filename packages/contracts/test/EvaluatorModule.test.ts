@@ -65,9 +65,17 @@ describe("EvaluatorModule — Unit Tests (ECDSA Signature Verification via Viem)
   describe("Constructor Validations", function () {
     it("Should set the correct jobContract address", async function () {
       const { evaluatorModule, jobContract } = await deployFixture();
-      expect((await evaluatorModule.read.jobContract()).toLowerCase()).to.equal(
+      expect(((await evaluatorModule.read.jobContract()) as string).toLowerCase()).to.equal(
         jobContract.address.toLowerCase()
       );
+    });
+
+    it("Should revert if initialized with zero address", async function () {
+      await expect(
+        hre.viem.deployContract("EvaluatorModule", [
+          "0x0000000000000000000000000000000000000000",
+        ])
+      ).to.be.rejectedWith("ZeroAddress");
     });
   });
 
@@ -93,14 +101,14 @@ describe("EvaluatorModule — Unit Tests (ECDSA Signature Verification via Viem)
         message: { raw: messageHash },
       });
 
-      const providerBalanceBefore = await mockUSDC.read.balanceOf([providerAgent.account.address]);
+      const providerBalanceBefore = (await mockUSDC.read.balanceOf([providerAgent.account.address])) as bigint;
 
       await evaluatorModule.write.submitApproval([jobId, DELIVERABLE_HASH, true, signature]);
 
-      const job = await jobContract.read.getJob([jobId]);
+      const job = (await jobContract.read.getJob([jobId])) as { state: number };
       expect(job.state).to.equal(3); // Terminal
 
-      const providerBalanceAfter = await mockUSDC.read.balanceOf([providerAgent.account.address]);
+      const providerBalanceAfter = (await mockUSDC.read.balanceOf([providerAgent.account.address])) as bigint;
       expect(providerBalanceAfter - providerBalanceBefore).to.equal(JOB_AMOUNT);
       expect(await reputationRegistry.read.getReputation([providerAgent.account.address])).to.equal(
         1n
@@ -121,14 +129,14 @@ describe("EvaluatorModule — Unit Tests (ECDSA Signature Verification via Viem)
         message: { raw: messageHash },
       });
 
-      const clientBalanceBefore = await mockUSDC.read.balanceOf([clientAgent.account.address]);
+      const clientBalanceBefore = (await mockUSDC.read.balanceOf([clientAgent.account.address])) as bigint;
 
       await evaluatorModule.write.submitApproval([jobId, DELIVERABLE_HASH, false, signature]);
 
-      const job = await jobContract.read.getJob([jobId]);
+      const job = (await jobContract.read.getJob([jobId])) as { state: number };
       expect(job.state).to.equal(3); // Terminal
 
-      const clientBalanceAfter = await mockUSDC.read.balanceOf([clientAgent.account.address]);
+      const clientBalanceAfter = (await mockUSDC.read.balanceOf([clientAgent.account.address])) as bigint;
       expect(clientBalanceAfter - clientBalanceBefore).to.equal(JOB_AMOUNT);
     });
   });
