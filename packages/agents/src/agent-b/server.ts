@@ -25,9 +25,9 @@ export function startServer(): Server {
   const { account } = agentB();
 
   const server = createServer((req, res) => {
-    const url = req.url ?? "";
+    const path = (req.url ?? "").split("?")[0] ?? "";
 
-    if (req.method === "GET" && url === "/task") {
+    if (req.method === "GET" && path === "/task") {
       const quote = {
         price: (BigInt(priceUsdc) * 10n ** 6n).toString(),
         provider: account.address,
@@ -41,7 +41,7 @@ export function startServer(): Server {
       return;
     }
 
-    const match = /^\/deliverable\/(\d+)$/.exec(url);
+    const match = /^\/deliverable\/(\d+)$/.exec(path);
     if (req.method === "GET" && match) {
       const svg = deliverables.get(match[1]!);
       if (!svg) {
