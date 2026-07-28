@@ -13,6 +13,7 @@ pkill -f "hardhat node" 2>/dev/null || true
 pkill -f "packages/indexer/src/index.ts" 2>/dev/null || true
 pkill -f "packages/agents/src/agent-a/index.ts" 2>/dev/null || true
 pkill -f "packages/agents/src/agent-b/index.ts" 2>/dev/null || true
+pkill -f "packages/agents/src/agent-c/index.ts" 2>/dev/null || true
 # next dev
 pkill -f "next dev" 2>/dev/null || true
 

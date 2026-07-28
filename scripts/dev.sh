@@ -36,6 +36,11 @@ echo "[dev] starting agent-b…"
 npm run agent:b &
 pids+=($!)
 
-# 5. Start the frontend (foreground — Ctrl-C stops everything)
+# 5. Start Agent C (evaluator)
+echo "[dev] starting agent-c…"
+npm run agent:c &
+pids+=($!)
+
+# 6. Start the frontend (foreground — Ctrl-C stops everything)
 echo "[dev] starting web…"
 npm run web
