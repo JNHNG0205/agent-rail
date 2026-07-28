@@ -154,6 +154,28 @@ describe("EvaluatorModule — Unit Tests (ECDSA Signature Verification)", functi
         .withArgs(unauthorizedSigner.address, evaluatorAgent.address);
     });
 
+    it("Should revert NotAuthorizedEvaluator if valid signature for job 0 is replayed against job 1", async function () {
+      // Setup job 1
+      await mockUSDC.mint(clientAgent.address, JOB_AMOUNT);
+      await mockUSDC.connect(clientAgent).approve(await jobContract.getAddress(), JOB_AMOUNT);
+      await jobContract.connect(clientAgent).createJob(providerAgent.address, evaluatorAgent.address, JOB_AMOUNT);
+      const job1Id = 1n;
+      await jobContract.connect(clientAgent).fundJob(job1Id);
+      await jobContract.connect(providerAgent).submitDeliverable(job1Id, DELIVERABLE_HASH);
+
+      // Generate valid signature for job 0
+      const messageHashJob0 = ethers.solidityPackedKeccak256(
+        ["uint256", "bytes32", "bool"],
+        [jobId, DELIVERABLE_HASH, true]
+      );
+      const signatureJob0 = await evaluatorAgent.signMessage(ethers.getBytes(messageHashJob0));
+
+      // Replay job 0's signature against job 1
+      await expect(
+        evaluatorModule.submitApproval(job1Id, DELIVERABLE_HASH, true, signatureJob0)
+      ).to.be.revertedWithCustomError(evaluatorModule, "NotAuthorizedEvaluator");
+    });
+
     it("Should revert if signature is forged or corrupted", async function () {
       const messageHash = ethers.solidityPackedKeccak256(
         ["uint256", "bytes32", "bool"],
