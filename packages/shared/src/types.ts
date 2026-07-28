@@ -8,11 +8,22 @@ export enum JobState {
   Terminal = 3,
 }
 
-export const JOB_STATE_LABELS: Record<JobState, string> = {
+export type JobStateLabel = "Open" | "Funded" | "Submitted" | "Terminal";
+
+export const JOB_STATE_LABELS: Record<JobState, JobStateLabel> = {
   [JobState.Open]: "Open",
   [JobState.Funded]: "Funded",
   [JobState.Submitted]: "Submitted",
   [JobState.Terminal]: "Terminal",
+};
+
+/// The jobs table stores the label, not the enum ordinal. The indexer needs
+/// enum -> label on write; toJob() needs label -> enum on read.
+export const JOB_STATE_BY_LABEL: Record<JobStateLabel, JobState> = {
+  Open: JobState.Open,
+  Funded: JobState.Funded,
+  Submitted: JobState.Submitted,
+  Terminal: JobState.Terminal,
 };
 
 export interface Agent {
@@ -23,6 +34,8 @@ export interface Agent {
   registeredAt: string | null; // ISO timestamp
 }
 
+/// Domain shape — what the chain gives you. The indexer builds this from
+/// decoded viem events, where amounts really are bigint.
 export interface Job {
   id: number; // on-chain job id
   client: `0x${string}`;
@@ -31,8 +44,38 @@ export interface Job {
   amount: bigint; // USDC minor units (6 decimals)
   state: JobState;
   deliverableHash: `0x${string}` | null;
-  createdBlock: number;
+  createdBlock: bigint;
   updatedAt: string | null; // ISO timestamp
+}
+
+/// Wire shape — exactly what GET /api/jobs returns. JSON cannot represent a
+/// bigint, so Postgres NUMERIC and BIGINT arrive as strings and `state` as its
+/// label. Parse with toJob() only where you need arithmetic; to display an
+/// amount, formatUsdc(BigInt(row.amount)) is enough.
+export interface JobRow {
+  id: number;
+  client: `0x${string}`;
+  provider: `0x${string}`;
+  evaluator: `0x${string}`;
+  amount: string;
+  state: JobStateLabel;
+  deliverableHash: `0x${string}` | null;
+  createdBlock: string;
+  updatedAt: string | null;
+}
+
+export function toJob(row: JobRow): Job {
+  return {
+    id: row.id,
+    client: row.client,
+    provider: row.provider,
+    evaluator: row.evaluator,
+    amount: BigInt(row.amount),
+    state: JOB_STATE_BY_LABEL[row.state],
+    deliverableHash: row.deliverableHash,
+    createdBlock: BigInt(row.createdBlock),
+    updatedAt: row.updatedAt,
+  };
 }
 
 /// Deployed address set for one chain. Lives here rather than in addresses.ts
@@ -65,13 +108,17 @@ export interface DeliverableReview {
   missingElements: string[];
 }
 
+/// Wire shape for GET /api/events. Wire-only — nothing builds a domain version
+/// of an event, so unlike Job there is no bigint counterpart. `blockNumber` is
+/// a string for the same reason as JobRow: BIGINT does not survive JSON.
 export interface ChainEvent {
   id: number;
   contract: string;
   eventName: string;
   jobId: number | null;
   txHash: `0x${string}`;
-  blockNumber: number;
+  blockNumber: string;
+  logIndex: number; // position within the tx; with blockNumber gives chain order
   args: Record<string, unknown>;
   createdAt: string; // ISO timestamp
 }

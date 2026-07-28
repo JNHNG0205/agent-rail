@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { JobStateBadge } from "@/components/JobStateBadge";
-import { JobState, type Job } from "@agentrail/shared";
+import { JOB_STATE_BY_LABEL, JobState, type JobRow } from "@agentrail/shared";
 
 /// Job list + current states. Server component fetching from the jobs API. Member 3.
-async function getJobs(): Promise<Job[]> {
+/// JobRow, not Job — /api/jobs returns strings for amount and createdBlock and
+/// a label for state, because JSON cannot carry a bigint. Use toJob() if you
+/// need arithmetic; formatUsdc(BigInt(row.amount)) is enough to display one.
+async function getJobs(): Promise<JobRow[]> {
   // TODO(M3): fetch(`${baseUrl}/api/jobs`) against the indexed DB.
   return [];
 }
@@ -21,7 +24,7 @@ export default async function JobsPage() {
           {jobs.map((job) => (
             <li key={job.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #1c2230" }}>
               <Link href={`/jobs/${job.id}`}>Job #{job.id}</Link>{" "}
-              <JobStateBadge state={job.state ?? JobState.Open} />
+              <JobStateBadge state={JOB_STATE_BY_LABEL[job.state] ?? JobState.Open} />
             </li>
           ))}
         </ul>

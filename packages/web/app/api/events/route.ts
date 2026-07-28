@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import type { ChainEvent } from "@agentrail/shared";
 
 /// GET /api/events?jobId=<n> — recent event feed from the indexed cache. Member 4.
 /// Ordered by chain position, not insertion time: created_at ties for events in
@@ -10,11 +11,11 @@ export async function GET(request: Request) {
 
   try {
     const rows = jobId
-      ? await query(
+      ? await query<ChainEvent>(
           "SELECT id, contract, event_name AS \"eventName\", job_id AS \"jobId\", tx_hash AS \"txHash\", block_number AS \"blockNumber\", log_index AS \"logIndex\", args, created_at AS \"createdAt\" FROM events WHERE job_id = $1 ORDER BY block_number DESC, log_index DESC LIMIT 50",
           [Number(jobId)]
         )
-      : await query(
+      : await query<ChainEvent>(
           "SELECT id, contract, event_name AS \"eventName\", job_id AS \"jobId\", tx_hash AS \"txHash\", block_number AS \"blockNumber\", log_index AS \"logIndex\", args, created_at AS \"createdAt\" FROM events ORDER BY block_number DESC, log_index DESC LIMIT 50"
         );
     return NextResponse.json(rows);
