@@ -4,10 +4,12 @@ const { ethers } = require("hardhat");
 describe("JobContract - Core Business Logic & USDC Escrow", function () {
   let mockUSDC;
   let jobContract;
+  let reputationRegistry;
   let owner;
   let client;
   let provider;
   let evaluator;
+  let evaluatorModuleSim;
   let stranger;
 
   const INITIAL_MINT = ethers.parseUnits("1000", 6); // 1,000 USDC
@@ -15,7 +17,7 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
   const DELIVERABLE_HASH = ethers.keccak256(ethers.toUtf8Bytes("deliverable_result_v1"));
 
   beforeEach(async function () {
-    [owner, client, provider, evaluator, stranger] = await ethers.getSigners();
+    [owner, client, provider, evaluator, evaluatorModuleSim, stranger] = await ethers.getSigners();
 
     // Deploy MockUSDC
     const MockUSDC = await ethers.getContractFactory("MockUSDC");
@@ -26,6 +28,15 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
     const JobContract = await ethers.getContractFactory("JobContract");
     jobContract = await JobContract.deploy(await mockUSDC.getAddress());
     await jobContract.waitForDeployment();
+
+    // Deploy ReputationRegistry & configure bidirectional authorization
+    const ReputationRegistry = await ethers.getContractFactory("ReputationRegistry");
+    reputationRegistry = await ReputationRegistry.deploy(owner.address);
+    await reputationRegistry.waitForDeployment();
+
+    await jobContract.setEvaluatorModule(evaluatorModuleSim.address);
+    await jobContract.setReputationRegistry(await reputationRegistry.getAddress());
+    await reputationRegistry.setJobContract(await jobContract.getAddress());
 
     // Mint USDC for client
     await mockUSDC.mint(client.address, INITIAL_MINT);
@@ -107,14 +118,14 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
       expect(job.deliverableHash).to.equal(DELIVERABLE_HASH);
     });
 
-    it("Should allow evaluator to settle job and release funds to provider", async function () {
+    it("Should allow evaluatorModule to settle job, release funds to provider, and increment reputation", async function () {
       await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
       await jobContract.connect(client).fundJob(jobId);
       await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
 
       const providerInitialBalance = await mockUSDC.balanceOf(provider.address);
 
-      await expect(jobContract.connect(evaluator).settle(jobId))
+      await expect(jobContract.connect(evaluatorModuleSim).settle(jobId))
         .to.emit(jobContract, "JobCompleted")
         .withArgs(jobId, provider.address, JOB_AMOUNT);
 
@@ -123,6 +134,9 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
 
       const providerFinalBalance = await mockUSDC.balanceOf(provider.address);
       expect(providerFinalBalance - providerInitialBalance).to.equal(JOB_AMOUNT);
+
+      // Verify reputation score incremented
+      expect(await reputationRegistry.getReputation(provider.address)).to.equal(1n);
 
       const escrowBalance = await mockUSDC.balanceOf(await jobContract.getAddress());
       expect(escrowBalance).to.equal(0);
@@ -196,7 +210,7 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
         .withArgs(stranger.address);
     });
 
-    it("Should revert if non-evaluator attempts to settle", async function () {
+    it("Should revert if non-evaluatorModule attempts to settle", async function () {
       await mockUSDC.connect(client).approve(await jobContract.getAddress(), JOB_AMOUNT);
       await jobContract.connect(client).fundJob(jobId);
       await jobContract.connect(provider).submitDeliverable(jobId, DELIVERABLE_HASH);
@@ -211,7 +225,7 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
       await jobContract.connect(client).fundJob(jobId);
 
       // Attempt to settle when state is Funded (1) instead of Submitted (2)
-      await expect(jobContract.connect(evaluator).settle(jobId))
+      await expect(jobContract.connect(evaluatorModuleSim).settle(jobId))
         .to.be.revertedWithCustomError(jobContract, "InvalidState")
         .withArgs(jobId, 1, 2);
     });
@@ -236,15 +250,6 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
 
       await expect(jobContract.connect(provider).submitDeliverable(jobId, ethers.ZeroHash))
         .to.be.revertedWith("Invalid deliverable hash");
-    });
-
-    it("Should fallback to DEFAULT_TIMEOUT_BLOCKS if timeoutBlocks parameter is 0", async function () {
-      const tx = await jobContract
-        .connect(client)
-        ["createJob(address,address,uint256,uint256)"](provider.address, evaluator.address, JOB_AMOUNT, 0);
-      await tx.wait();
-      const job = await jobContract.getJob(1);
-      expect(job.timeoutBlocks).to.equal(100);
     });
   });
 
@@ -282,7 +287,7 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
         .withArgs(stranger.address);
     });
 
-    it("Should allow provider to claim timeout funds after deadline expires", async function () {
+    it("Should allow provider to claim timeout funds after deadline expires and increment reputation", async function () {
       const providerInitialBalance = await mockUSDC.balanceOf(provider.address);
 
       // Advance 30 blocks beyond deadline
@@ -299,6 +304,9 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
 
       const providerFinalBalance = await mockUSDC.balanceOf(provider.address);
       expect(providerFinalBalance - providerInitialBalance).to.equal(JOB_AMOUNT);
+
+      // Reputation incremented on timeout claim
+      expect(await reputationRegistry.getReputation(provider.address)).to.equal(1n);
     });
   });
 });

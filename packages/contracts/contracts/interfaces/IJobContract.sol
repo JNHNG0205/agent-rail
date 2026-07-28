@@ -26,7 +26,11 @@ interface IJobContract {
     event JobCompleted(uint256 indexed jobId, address indexed provider, uint256 amount);
     event JobCancelled(uint256 indexed jobId, address indexed client, uint256 refund);
     event JobTimeoutClaimed(uint256 indexed jobId, address indexed provider, uint256 amount);
+    event EvaluatorModuleUpdated(address indexed newEvaluatorModule);
+    event ReputationRegistryUpdated(address indexed newReputationRegistry);
 
+    function setEvaluatorModule(address _evaluatorModule) external;
+    function setReputationRegistry(address _reputationRegistry) external;
     function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId);
     function createJob(address provider, address evaluator, uint256 amount, uint256 timeoutBlocks) external returns (uint256 jobId);
     function fundJob(uint256 jobId) external;

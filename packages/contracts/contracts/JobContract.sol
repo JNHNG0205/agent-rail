@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface IReputationRegistry {
+    function recordCompletion(address agent) external;
+}
+
 /// @title JobContract — ERC-8183 job lifecycle + USDC escrow.
 /// @notice Client creates a job, funds it into escrow, provider submits a
 ///         deliverable hash, and settlement releases (or refunds) the escrow.
@@ -31,6 +35,9 @@ contract JobContract {
     }
 
     IERC20 public immutable usdc;
+    address public owner;
+    address public evaluatorModule;
+    address public reputationRegistry;
 
     // jobId => Job
     mapping(uint256 => Job) public jobs;
@@ -48,6 +55,13 @@ contract JobContract {
     event JobCompleted(uint256 indexed jobId, address indexed provider, uint256 amount);
     event JobCancelled(uint256 indexed jobId, address indexed client, uint256 refund);
     event JobTimeoutClaimed(uint256 indexed jobId, address indexed provider, uint256 amount);
+    event EvaluatorModuleUpdated(address indexed newEvaluatorModule);
+    event ReputationRegistryUpdated(address indexed newReputationRegistry);
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert Unauthorized(msg.sender);
+        _;
+    }
 
     modifier inState(uint256 jobId, JobState expectedState) {
         if (jobs[jobId].state != expectedState) {
@@ -70,8 +84,8 @@ contract JobContract {
         _;
     }
 
-    modifier onlyEvaluator(uint256 jobId) {
-        if (msg.sender != jobs[jobId].evaluator) {
+    modifier onlyEvaluatorModule() {
+        if (evaluatorModule == address(0) || msg.sender != evaluatorModule) {
             revert Unauthorized(msg.sender);
         }
         _;
@@ -80,6 +94,21 @@ contract JobContract {
     constructor(address usdc_) {
         if (usdc_ == address(0)) revert ZeroAddress();
         usdc = IERC20(usdc_);
+        owner = msg.sender;
+    }
+
+    /// @notice Set or update the authorized EvaluatorModule address.
+    function setEvaluatorModule(address _evaluatorModule) external onlyOwner {
+        if (_evaluatorModule == address(0)) revert ZeroAddress();
+        evaluatorModule = _evaluatorModule;
+        emit EvaluatorModuleUpdated(_evaluatorModule);
+    }
+
+    /// @notice Set or update the ReputationRegistry address.
+    function setReputationRegistry(address _reputationRegistry) external onlyOwner {
+        if (_reputationRegistry == address(0)) revert ZeroAddress();
+        reputationRegistry = _reputationRegistry;
+        emit ReputationRegistryUpdated(_reputationRegistry);
     }
 
     /// @notice Client opens a job targeting a specific provider and evaluator with default timeout.
@@ -133,13 +162,17 @@ contract JobContract {
     }
 
     /// @notice Release escrow to the provider once an approval is verified.
-    /// @dev Called after EvaluatorModule verifies the client's signed approval.
-    function settle(uint256 jobId) external inState(jobId, JobState.Submitted) onlyEvaluator(jobId) {
+    /// @dev Called exclusively by EvaluatorModule after signature verification.
+    function settle(uint256 jobId) external inState(jobId, JobState.Submitted) onlyEvaluatorModule {
         Job storage job = jobs[jobId];
         job.state = JobState.Terminal;
 
         bool success = usdc.transfer(job.provider, job.amount);
         require(success, "USDC transfer failed");
+
+        if (reputationRegistry != address(0)) {
+            IReputationRegistry(reputationRegistry).recordCompletion(job.provider);
+        }
 
         emit JobCompleted(jobId, job.provider, job.amount);
     }
@@ -157,27 +190,31 @@ contract JobContract {
         bool success = usdc.transfer(job.provider, job.amount);
         require(success, "USDC transfer failed");
 
+        if (reputationRegistry != address(0)) {
+            IReputationRegistry(reputationRegistry).recordCompletion(job.provider);
+        }
+
         emit JobTimeoutClaimed(jobId, job.provider, job.amount);
         emit JobCompleted(jobId, job.provider, job.amount);
     }
 
-    /// @notice Refund the client for a job that never completed.
+    /// @notice Refund the client for a job that never completed or was rejected by evaluator.
     function cancel(uint256 jobId) external {
         Job storage job = jobs[jobId];
         JobState oldState = job.state;
 
-        if (oldState != JobState.Open && oldState != JobState.Funded) {
+        if (oldState != JobState.Open && oldState != JobState.Funded && oldState != JobState.Submitted) {
             revert InvalidState(jobId, oldState, JobState.Open);
         }
 
-        if (msg.sender != job.client && msg.sender != job.evaluator) {
+        if (msg.sender != job.client && msg.sender != job.evaluator && msg.sender != evaluatorModule) {
             revert Unauthorized(msg.sender);
         }
 
         job.state = JobState.Terminal;
         uint256 refundAmount = 0;
 
-        if (oldState == JobState.Funded) {
+        if (oldState == JobState.Funded || oldState == JobState.Submitted) {
             refundAmount = job.amount;
             bool success = usdc.transfer(job.client, refundAmount);
             require(success, "USDC transfer failed");
