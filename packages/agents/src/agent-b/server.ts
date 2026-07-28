@@ -4,6 +4,9 @@ import { agentB } from "../lib/wallet.js";
 
 /// The fixed service Agent B sells. Advertised in the 402 quote and used verbatim as the
 /// rubric by the evaluator, so advertised and graded terms cannot drift apart.
+// TODO(M4): this list and the requirements Agent A's LLM invents in agent-a/llm.ts are
+//           currently two unrelated arrays. hire() must adopt SERVICE_REQUIREMENTS (via the
+//           quote) into the brief Agent C grades against so advertised and graded terms match.
 export const SERVICE_REQUIREMENTS = [
   "shows the title text",
   "shows the subtitle text",

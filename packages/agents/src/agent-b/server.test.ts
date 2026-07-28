@@ -7,6 +7,9 @@ import { startServer, rememberDeliverable, SERVICE_REQUIREMENTS } from "./server
 let server: Server;
 let baseUrl: string;
 
+const originalPort = process.env.AGENT_B_PORT;
+const originalPrivateKey = process.env.AGENT_B_PRIVATE_KEY;
+
 before(async () => {
   process.env.AGENT_B_PORT = "0";
   process.env.AGENT_B_PRIVATE_KEY =
@@ -24,6 +27,12 @@ after(async () => {
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   });
+
+  if (originalPort === undefined) delete process.env.AGENT_B_PORT;
+  else process.env.AGENT_B_PORT = originalPort;
+
+  if (originalPrivateKey === undefined) delete process.env.AGENT_B_PRIVATE_KEY;
+  else process.env.AGENT_B_PRIVATE_KEY = originalPrivateKey;
 });
 
 test("GET /task returns a 402 quote", async () => {

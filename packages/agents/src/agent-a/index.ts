@@ -10,10 +10,11 @@ async function main() {
   const agentBUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
 
   const brief = await composeBrief(GOAL);
+  const requirementNoun = brief.requirements.length === 1 ? "requirement" : "requirements";
   console.log(
     "[agent-a] brief:",
     brief.title,
-    `(${brief.requirements.length} requirements)`,
+    `(${brief.requirements.length} ${requirementNoun})`,
     `provider=${agentBUrl}`,
   );
 

@@ -22,6 +22,8 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch;
+  delete process.env.LLM_API_KEY;
+  delete process.env.LLM_MODEL;
 });
 
 test("approves when the hash matches", async () => {

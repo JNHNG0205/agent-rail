@@ -79,6 +79,16 @@ test("completeJson strips code fences before parsing", async () => {
   assert.deepEqual(out, { n: 3 });
 });
 
+test("completeJson throws when the mock itself fails its own guard", async () => {
+  process.env.LLM_PROVIDER = "mock";
+  const isNum = (v: unknown): v is { n: number } =>
+    typeof v === "object" && v !== null && typeof (v as { n?: unknown }).n === "number";
+  await assert.rejects(
+    () => completeJson({ system: "s", user: "u", mock: { n: "not a number" } } as never, isNum),
+    /guard/,
+  );
+});
+
 test("completeJson throws when the guard rejects twice", async () => {
   process.env.LLM_PROVIDER = "openrouter";
   process.env.LLM_API_KEY = "sk-or-test";
@@ -144,6 +154,22 @@ test("openrouter provider throws a named error after two consecutive non-ok resp
     /failed after 2 attempts/,
   );
   assert.equal(calls, 2);
+});
+
+test("a cased LLM_PROVIDER value still takes the mock path", async () => {
+  process.env.LLM_PROVIDER = "MOCK";
+  const calls = stubFetch("SHOULD NOT BE USED");
+  const out = await complete({ system: "s", user: "u", mock: "canned" });
+  assert.equal(out, "canned");
+  assert.equal(calls(), 0);
+});
+
+test("an unknown LLM_PROVIDER value throws a named error", async () => {
+  process.env.LLM_PROVIDER = "bogus";
+  await assert.rejects(
+    () => complete({ system: "s", user: "u", mock: "canned" }),
+    /LLM_PROVIDER/,
+  );
 });
 
 test("openrouter provider catches a rejecting fetch, retries, and throws after the second attempt", async () => {

@@ -20,6 +20,22 @@ interface ChatCompletion {
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MAX_TOKENS = 4000;
 
+type Provider = "mock" | "openrouter";
+
+/// Trims and lowercases before comparing so `Mock`, `MOCK`, or a trailing space cannot
+/// silently take the network path — that mismatch is the exact demo-day failure mock mode
+/// exists to prevent. Unset still defaults to "mock".
+function resolveProvider(): Provider {
+  const raw = process.env.LLM_PROVIDER;
+  if (raw === undefined) return "mock";
+  const normalised = raw.trim().toLowerCase();
+  if (normalised === "" || normalised === "mock") return "mock";
+  if (normalised === "openrouter") return "openrouter";
+  throw new Error(
+    `LLM_PROVIDER must be "mock" or "openrouter" (got ${JSON.stringify(raw)})`,
+  );
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -76,7 +92,7 @@ async function postChat(req: CompletionRequest): Promise<string> {
 }
 
 export async function complete(req: CompletionRequest): Promise<string> {
-  const provider = process.env.LLM_PROVIDER ?? "mock";
+  const provider = resolveProvider();
   if (provider === "mock") return req.mock;
   return postChat(req);
 }
@@ -92,8 +108,15 @@ export async function completeJson<T>(
   req: JsonCompletionRequest<T>,
   guard: (value: unknown) => value is T,
 ): Promise<T> {
-  const provider = process.env.LLM_PROVIDER ?? "mock";
-  if (provider === "mock") return req.mock;
+  const provider = resolveProvider();
+  if (provider === "mock") {
+    // The mock is a required field precisely so offline mode cannot rot — running the same
+    // guard the network path uses here is what enforces that.
+    if (!guard(req.mock)) {
+      throw new Error("completeJson: the mock value does not satisfy its own guard");
+    }
+    return req.mock;
+  }
 
   const base: CompletionRequest = {
     system: req.system,

@@ -51,5 +51,8 @@ export async function runTask(brief: PosterBrief): Promise<string> {
   if (!svg.startsWith("<svg") || !svg.endsWith("</svg>")) {
     throw new Error(`provider returned non-SVG content: ${svg.slice(0, 80)}`);
   }
+  // TODO(M3): this only checks the outer tags, e.g. "<svg><script>...</script></svg>" would
+  //           pass. The returned string is untrusted provider output — sanitise it before
+  //           rendering as HTML in the web UI; do not trust it as safe markup as-is.
   return svg;
 }
