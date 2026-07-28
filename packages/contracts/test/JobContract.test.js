@@ -32,8 +32,9 @@ describe("JobContract - Core Business Logic & USDC Escrow", function () {
   });
 
   describe("Constructor & Zero Input Validations", function () {
-    it("Should set the correct USDC address", async function () {
+    it("Should set the correct USDC address and decimals", async function () {
       expect(await jobContract.usdc()).to.equal(await mockUSDC.getAddress());
+      expect(await mockUSDC.decimals()).to.equal(6);
     });
 
     it("Should revert if deployed with zero address for USDC", async function () {
