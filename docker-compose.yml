@@ -1,0 +1,30 @@
+# Local Postgres for the AgentRail read-cache. The chain stays the source of
+# truth; this is what the indexer writes and the web API routes read.
+#   npm run db:up      start it
+#   npm run db:setup   start it and apply the schema
+#   npm run db:down    stop it (data survives)
+#   npm run db:reset   stop it and delete the volume
+services:
+  postgres:
+    image: postgres:16
+    container_name: agentrail-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentrail
+    # Override if 5432 is taken by another project's container:
+    #   POSTGRES_PORT=5433 npm run db:up   (and update DATABASE_URL to match)
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - agentrail-pgdata:/var/lib/postgresql/data
+    # dev.sh waits on this instead of sleeping a fixed interval.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agentrail"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  agentrail-pgdata:

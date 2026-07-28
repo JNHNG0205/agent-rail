@@ -15,32 +15,37 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 1. Start the local chain
+# 1. Start Postgres and apply the schema. Must precede the indexer, which
+#    writes on its first event and dies if the tables are missing.
+echo "[dev] starting database…"
+npm run db:setup
+
+# 2. Start the local chain
 echo "[dev] starting Hardhat node…"
 npm run chain &
 pids+=($!)
 sleep 3
 
-# 2. Deploy + seed
+# 3. Deploy + seed
 echo "[dev] deploying + seeding…"
 npm run deploy
 npm run seed
 
-# 3. Start the indexer
+# 4. Start the indexer
 echo "[dev] starting indexer…"
 npm run indexer &
 pids+=($!)
 
-# 4. Start Agent B (402 server + chain listener)
+# 5. Start Agent B (402 server + chain listener)
 echo "[dev] starting agent-b…"
 npm run agent:b &
 pids+=($!)
 
-# 5. Start Agent C (evaluator)
+# 6. Start Agent C (evaluator)
 echo "[dev] starting agent-c…"
 npm run agent:c &
 pids+=($!)
 
-# 6. Start the frontend (foreground — Ctrl-C stops everything)
+# 7. Start the frontend (foreground — Ctrl-C stops everything)
 echo "[dev] starting web…"
 npm run web
