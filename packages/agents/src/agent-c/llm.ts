@@ -18,6 +18,7 @@ export function isDeliverableReview(value: unknown): value is DeliverableReview 
   return (
     typeof v.approve === "boolean" &&
     typeof v.reason === "string" &&
+    v.reason.trim().length > 0 &&
     Array.isArray(v.presentElements) &&
     v.presentElements.every((e) => typeof e === "string") &&
     Array.isArray(v.missingElements) &&
@@ -62,7 +63,7 @@ export async function reviewDeliverable(
     const detail = err instanceof Error ? err.message : String(err);
     return {
       approve: false,
-      reason: `review failed to parse a verdict from the provider: ${detail}`,
+      reason: `could not obtain a valid review from the provider: ${detail}`,
       presentElements: [],
       missingElements: [...brief.requirements],
     };

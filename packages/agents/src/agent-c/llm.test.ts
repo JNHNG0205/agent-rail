@@ -42,10 +42,82 @@ test("returns approve:false instead of throwing when the model reply is malforme
 
   const review = await reviewDeliverable(BRIEF, "<svg></svg>");
   assert.equal(review.approve, false);
-  assert.match(review.reason, /parse/i);
+  assert.match(review.reason, /could not obtain a valid review/i);
 });
 
 test("isDeliverableReview rejects malformed objects", () => {
   assert.equal(isDeliverableReview({ approve: true }), false);
   assert.equal(isDeliverableReview(null), false);
+});
+
+test("isDeliverableReview rejects an empty reason", () => {
+  assert.equal(
+    isDeliverableReview({
+      approve: true,
+      reason: "",
+      presentElements: ["x"],
+      missingElements: [],
+    }),
+    false,
+  );
+});
+
+test("isDeliverableReview rejects a whitespace-only reason", () => {
+  assert.equal(
+    isDeliverableReview({
+      approve: true,
+      reason: "   ",
+      presentElements: ["x"],
+      missingElements: [],
+    }),
+    false,
+  );
+});
+
+test("isDeliverableReview accepts a fully-valid review", () => {
+  assert.equal(
+    isDeliverableReview({
+      approve: true,
+      reason: "All requirements are present.",
+      presentElements: ["title", "subtitle"],
+      missingElements: [],
+    }),
+    true,
+  );
+});
+
+test("isDeliverableReview accepts empty presentElements and missingElements", () => {
+  assert.equal(
+    isDeliverableReview({
+      approve: true,
+      reason: "Approved with nothing notable to call out.",
+      presentElements: [],
+      missingElements: [],
+    }),
+    true,
+  );
+});
+
+test("reviewDeliverable turns an empty-reason model reply into a rejection with a real reason", async () => {
+  process.env.LLM_PROVIDER = "openrouter";
+  process.env.LLM_API_KEY = "sk-or-test";
+  process.env.LLM_MODEL = "some/model";
+  const emptyReasonReview = {
+    approve: true,
+    reason: "",
+    presentElements: ["x"],
+    missingElements: [],
+  };
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({ choices: [{ message: { content: JSON.stringify(emptyReasonReview) } }] }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const review = await reviewDeliverable(BRIEF, "<svg></svg>");
+  assert.equal(review.approve, false);
+  assert.ok(review.reason.length > 0, "reason must be populated even when the model omitted it");
 });
