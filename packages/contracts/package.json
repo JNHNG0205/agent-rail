@@ -6,7 +6,10 @@
     "compile": "hardhat compile",
     "node": "hardhat node",
     "deploy": "hardhat run scripts/deploy.ts --network localhost",
+    "deploy:base-sepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
     "seed": "hardhat run scripts/seed.ts --network localhost",
+    "seed:base-sepolia": "hardhat run scripts/seed.ts --network baseSepolia",
+    "verify:base-sepolia": "hardhat verify --network baseSepolia",
     "test": "hardhat test",
     "coverage": "SOLIDITY_COVERAGE=true hardhat coverage"
   },
@@ -22,6 +25,7 @@
     "viem": "^2.18.0"
   },
   "dependencies": {
+    "@agentrail/shared": "*",
     "@openzeppelin/contracts": "^5.0.2"
   }
 }
