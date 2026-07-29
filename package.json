@@ -21,6 +21,7 @@
     "agent:b": "npm -w packages/agents run start:b",
     "agent:c": "npm -w packages/agents run start:c",
     "test": "npm test --workspaces --if-present",
+    "coverage": "npm -w packages/contracts run coverage",
     "dev": "bash scripts/dev.sh",
     "demo:reset": "bash scripts/demo-reset.sh"
   },

@@ -1,37 +1,74 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
-/// @title EvaluatorModule — ERC-7579 module that verifies a client's signed
-///        approval before settlement is allowed. Member 2.
-/// @notice The client signs an approval over (jobId, deliverableHash). This
-///         module recovers the signer via ECDSA and, if valid, triggers
-///         settlement on the JobContract.
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {IJobContract} from "./interfaces/IJobContract.sol";
+
+/// @title EvaluatorModule — Off-chain signature verification module for job evaluation.
+/// @notice Verifies an EIP-191 signed approval/rejection from an evaluator agent and forwards to JobContract.
 contract EvaluatorModule {
-    address public immutable jobContract;
+    using ECDSA for bytes32;
 
-    event ApprovalVerified(uint256 indexed jobId, address indexed signer);
+    IJobContract public immutable jobContract;
 
-    constructor(address jobContract_) {
-        jobContract = jobContract_;
+    /// @notice Custom error thrown when the contract address is zero.
+    error ZeroAddress();
+
+    /// @notice Custom error thrown when the recovered signer does not match the job's evaluator.
+    /// @param recovered The address recovered from the signature.
+    /// @param expected The expected evaluator address from the job struct.
+    error NotAuthorizedEvaluator(address recovered, address expected);
+
+    /// @notice Custom error thrown when the deliverable hash being approved does not match the on-chain submission.
+    /// @param provided The deliverable hash provided in the submission.
+    /// @param expected The deliverable hash recorded on JobContract.
+    error DeliverableMismatch(bytes32 provided, bytes32 expected);
+
+    /// @notice Emitted after an approval or rejection signature has been processed.
+    /// @param jobId The ID of the job evaluated.
+    /// @param signer The address of the evaluator who signed the decision.
+    /// @param approved True if approved (settled), false if rejected (cancelled).
+    event ApprovalProcessed(uint256 indexed jobId, address indexed signer, bool approved);
+
+    /// @notice Initializes the EvaluatorModule with the JobContract address.
+    /// @param _jobContract The deployed JobContract address.
+    constructor(address _jobContract) {
+        if (_jobContract == address(0)) revert ZeroAddress();
+        jobContract = IJobContract(_jobContract);
     }
 
-    /// @notice Verify an approval signature and settle the job on success.
-    /// @param jobId            the job being approved
-    /// @param deliverableHash  hash the client is approving
-    /// @param signature        client's ECDSA signature over the approval digest
-    function approveAndSettle(uint256 jobId, bytes32 deliverableHash, bytes calldata signature) external {
-        // TODO(M2): build the EIP-191/EIP-712 digest, ECDSA-recover the signer,
-        //           require signer == job.client, then call JobContract.settle.
-        revert("TODO(M2): approveAndSettle");
-    }
+    /// @notice Verifies an evaluator's signature over a job decision and triggers settlement or cancellation.
+    /// @param jobId The job ID to evaluate.
+    /// @param deliverableHash The keccak256 hash of the deliverable being evaluated.
+    /// @param approved True to approve and settle, false to reject and cancel.
+    /// @param signature The EIP-191 ECDSA signature from the evaluator agent.
+    function submitApproval(
+        uint256 jobId,
+        bytes32 deliverableHash,
+        bool approved,
+        bytes calldata signature
+    ) external {
+        IJobContract.Job memory job = jobContract.getJob(jobId);
 
-    /// @notice Pure signature check exposed for the frontend / tests.
-    function verifyApproval(uint256 jobId, bytes32 deliverableHash, bytes calldata signature)
-        external
-        pure
-        returns (address signer)
-    {
-        // TODO(M2): recover and return the signer without side effects.
-        revert("TODO(M2): verifyApproval");
+        if (deliverableHash != job.deliverableHash) {
+            revert DeliverableMismatch(deliverableHash, job.deliverableHash);
+        }
+
+        bytes32 messageHash = keccak256(abi.encodePacked(jobId, deliverableHash, approved));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address signer = ECDSA.recover(ethSignedMessageHash, signature);
+
+        if (signer != job.evaluator) {
+            revert NotAuthorizedEvaluator(signer, job.evaluator);
+        }
+
+        if (approved) {
+            jobContract.settle(jobId);
+        } else {
+            jobContract.cancel(jobId);
+        }
+
+        emit ApprovalProcessed(jobId, signer, approved);
     }
 }

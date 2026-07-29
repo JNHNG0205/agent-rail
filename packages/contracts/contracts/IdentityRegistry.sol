@@ -1,31 +1,65 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-/// @title IdentityRegistry — ERC-8004 on-chain agent identity as ERC-721.
-/// @notice Each registered agent mints one soulbound-style identity token that
-///         carries its display name. Member 2.
+/// @title IdentityRegistry — ERC-8004 inspired identity registry for AI agents.
+/// @notice Mints soulbound/identity NFTs to represent autonomous agents on-chain.
+///         Used by the frontend and indexer to track agent identities.
 contract IdentityRegistry is ERC721 {
-    uint256 public nextTokenId;
+    uint256 private _nextTokenId;
 
-    // tokenId => agent display name
-    mapping(uint256 => string) public agentName;
-    // agent address => tokenId (0 == unregistered)
-    mapping(address => uint256) public tokenOf;
+    // agent address => registered status
+    mapping(address => bool) private _registered;
 
-    event AgentRegistered(address indexed agent, uint256 indexed tokenId, string name);
+    // agent address => token ID
+    mapping(address => uint256) private _agentTokenId;
 
-    constructor() ERC721("AgentRail Identity", "ARID") {}
+    /// @notice Emitted when a new agent identity NFT is registered.
+    /// @param agent The address of the registered AI agent.
+    /// @param tokenId The unique ERC-721 token ID assigned to the agent.
+    event AgentRegistered(address indexed agent, uint256 indexed tokenId);
 
-    /// @notice Register `agent` with a display name, minting its identity token.
-    function register(address agent, string calldata name) external returns (uint256 tokenId) {
-        // TODO(M2): guard against double-registration, mint token, store name,
-        //           emit AgentRegistered.
-        revert("TODO(M2): register");
+    constructor() ERC721("AgentIdentity", "AID") {}
+
+    /// @notice Registers a new AI agent by minting an identity NFT.
+    /// @dev Reverts if the agent address is already registered.
+    /// @param agent The address of the AI agent to register.
+    /// @return tokenId The assigned ERC-721 token ID.
+    function registerAgent(address agent) external returns (uint256 tokenId) {
+        require(agent != address(0), "IdentityRegistry: invalid agent address");
+        require(!_registered[agent], "IdentityRegistry: agent already registered");
+
+        tokenId = _nextTokenId;
+        _nextTokenId++;
+
+        _registered[agent] = true;
+        _agentTokenId[agent] = tokenId;
+
+        _safeMint(agent, tokenId);
+
+        emit AgentRegistered(agent, tokenId);
     }
 
+    /// @notice Checks if an address is a registered AI agent.
+    /// @param agent The address to check.
+    /// @return Whether the address is registered.
     function isRegistered(address agent) external view returns (bool) {
-        return tokenOf[agent] != 0;
+        return _registered[agent];
+    }
+
+    /// @notice Gets the identity token ID assigned to a registered agent.
+    /// @param agent The address of the AI agent.
+    /// @return tokenId The assigned token ID.
+    function getAgentId(address agent) external view returns (uint256 tokenId) {
+        require(_registered[agent], "IdentityRegistry: agent not registered");
+        return _agentTokenId[agent];
+    }
+
+    /// @notice Gets the owner address of a given identity token ID.
+    /// @param tokenId The identity token ID to query.
+    /// @return The owner address of the token ID.
+    function getAgentAddress(uint256 tokenId) external view returns (address) {
+        return ownerOf(tokenId);
     }
 }
