@@ -11,6 +11,7 @@
     "chain": "npm -w packages/contracts run node",
     "deploy": "npm -w packages/contracts run deploy",
     "seed": "npm -w packages/contracts run seed",
+    "e2e": "npm -w packages/contracts run e2e",
     "db:up": "docker compose up -d postgres",
     "db:setup": "bash scripts/db-setup.sh",
     "db:down": "docker compose down",

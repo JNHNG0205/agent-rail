@@ -35,3 +35,5 @@ export { JobContractAbi } from "./src/abis/JobContract";
 export { EvaluatorModuleAbi } from "./src/abis/EvaluatorModule";
 export { IdentityRegistryAbi } from "./src/abis/IdentityRegistry";
 export { ReputationRegistryAbi } from "./src/abis/ReputationRegistry";
+export { MockUSDCAbi } from "./src/abis/MockUSDC";
+export { AGENT_LABELS, agentLabel } from "./src/agents";

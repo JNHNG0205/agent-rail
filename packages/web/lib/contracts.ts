@@ -32,7 +32,7 @@ export const reputationRegistry = {
 export async function readReputation(agent: `0x${string}`): Promise<bigint> {
   return publicClient.readContract({
     ...reputationRegistry,
-    functionName: "reputation",
+    functionName: "getReputation",
     args: [agent],
   });
 }
