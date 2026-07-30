@@ -6,9 +6,9 @@ const SYSTEM = `You are a client agent that commissions design work from other a
 Turn the user's goal into a poster brief. Reply with ONE JSON object and nothing else:
 {"title":string,"subtitle":string,"callToAction":string,"palette":string,"requirements":string[]}
 
-"requirements" are the success criteria the finished poster will be graded against.
-Write 3 to 5 of them. Each must be objectively checkable by looking at the poster —
-"shows the event date" is checkable, "looks professional" is not.`;
+Every field must be non-empty. Keep the title short enough to read on a poster.
+For "requirements", repeat back exactly the requirements given in the request —
+do not invent, reword, add or drop any.`;
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -42,9 +42,27 @@ const MOCK_BRIEF: PosterBrief = {
 };
 
 /// Turn Agent A's goal into the brief it sends Agent B. This is the hire decision.
-export async function composeBrief(goal: string): Promise<PosterBrief> {
-  return completeJson<PosterBrief>(
-    { system: SYSTEM, user: `Goal: ${goal}`, mock: MOCK_BRIEF, maxTokens: 1000 },
+///
+/// `requirements` come from the provider's 402 quote. The model is asked to echo
+/// them, but the result is overwritten with the quote's array regardless — the
+/// terms the provider advertised must be byte-identical to the terms the
+/// evaluator grades against, and that guarantee cannot rest on a model
+/// following an instruction.
+export async function composeBrief(
+  goal: string,
+  requirements: string[],
+): Promise<PosterBrief> {
+  const user = [
+    `Goal: ${goal}`,
+    "",
+    "Requirements (echo these back verbatim):",
+    ...requirements.map((r) => `- ${r}`),
+  ].join("\n");
+
+  const brief = await completeJson<PosterBrief>(
+    { system: SYSTEM, user, mock: { ...MOCK_BRIEF, requirements }, maxTokens: 1000 },
     isPosterBrief,
   );
+
+  return { ...brief, requirements };
 }

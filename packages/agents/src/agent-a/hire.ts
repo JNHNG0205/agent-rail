@@ -1,24 +1,126 @@
-import { addresses, JobContractAbi } from "@agentrail/shared";
-import { agentA } from "../lib/wallet.js";
+import {
+  addresses,
+  JobContractAbi,
+  MockUSDCAbi,
+  formatUsdc,
+  type PosterBrief,
+} from "@agentrail/shared";
+import { publicClient, agentA } from "../lib/wallet.js";
+import { composeBrief } from "./llm.js";
 
 export interface QuoteResponse {
   price: string; // USDC minor units, as string
   provider: `0x${string}`;
+  contract: `0x${string}`;
+  service: string;
   description: string;
   requirements: string[];
 }
 
-/// Hit Agent B's HTTP endpoint, read its 402 Payment Required quote, then
-/// create + fund an on-chain job for that provider. Member 4.
-export async function hire(agentBUrl: string): Promise<{ jobId: bigint; quote: QuoteResponse }> {
-  // TODO(M4): fetch(`${agentBUrl}/task`), expect HTTP 402 with the quote JSON,
-  //           parse price/provider, then call createJob + fundJob via JobContract.
-  // TODO(M4): adopt quote.requirements into the brief passed to Agent C's review so the
-  //           terms Agent B advertised and the terms it is graded against are the same array.
+export interface HireResult {
+  jobId: bigint;
+  brief: PosterBrief;
+  quote: QuoteResponse;
+}
+
+function isQuote(value: unknown): value is QuoteResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.price === "string" &&
+    typeof v.provider === "string" &&
+    Array.isArray(v.requirements) &&
+    v.requirements.every((r) => typeof r === "string")
+  );
+}
+
+/// Address of the evaluator this client assigns. Per ACP the client chooses the
+/// evaluator, so it is Agent A's configuration rather than the provider's. Only
+/// the address is needed here — never Agent C's key.
+function evaluatorAddress(): `0x${string}` {
+  const value = process.env.EVALUATOR_ADDRESS;
+  if (!value) throw new Error("EVALUATOR_ADDRESS is not set");
+  return value as `0x${string}`;
+}
+
+/// Hire Agent B: read its 402 quote, turn the goal into a brief against that
+/// quote's own requirements, open and fund an on-chain job, and hand the brief
+/// to the provider.
+///
+/// Order matters. createJob comes first because its jobId keys the work order;
+/// the brief is posted before fundJob so it is already in the provider's hands
+/// when JobFunded fires and its worker wakes.
+export async function hire(agentBUrl: string, goal: string): Promise<HireResult> {
   const { wallet, account } = agentA();
-  void wallet;
-  void account;
-  void addresses.JobContract;
-  void JobContractAbi;
-  throw new Error("TODO(M4): hire()");
+
+  const res = await fetch(`${agentBUrl}/task`);
+  if (res.status !== 402) {
+    throw new Error(`expected HTTP 402 Payment Required from provider, got ${res.status}`);
+  }
+  const quote: unknown = await res.json();
+  if (!isQuote(quote)) throw new Error("provider returned a malformed quote");
+
+  const amount = BigInt(quote.price);
+  console.log(
+    `[agent-a] quote: ${formatUsdc(amount)} USDC from ${quote.provider} for ${quote.service}`,
+  );
+
+  // The quote's requirements become the brief's, so what the provider
+  // advertised is exactly what the evaluator will grade against.
+  const brief = await composeBrief(goal, quote.requirements);
+  console.log(`[agent-a] brief: "${brief.title}" (${brief.requirements.length} requirements)`);
+
+  const evaluator = evaluatorAddress();
+  const createHash = await wallet.writeContract({
+    address: addresses.JobContract,
+    abi: JobContractAbi,
+    functionName: "createJob",
+    args: [quote.provider, evaluator, amount],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+
+  // createJob returns the id, but a return value is not readable from a
+  // receipt — recover it from the event emitted in the same block.
+  const created = await publicClient.getContractEvents({
+    address: addresses.JobContract,
+    abi: JobContractAbi,
+    eventName: "JobCreated",
+    blockHash: receipt.blockHash,
+  });
+  const mine = created.find(
+    (e) => e.args.client?.toLowerCase() === account.address.toLowerCase(),
+  );
+  if (mine?.args.jobId === undefined) {
+    throw new Error("createJob emitted no JobCreated event for this client");
+  }
+  const jobId = mine.args.jobId;
+  console.log(`[agent-a] job ${jobId} created, evaluator ${evaluator}`);
+
+  const commissioned = await fetch(`${agentBUrl}/commission`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jobId: jobId.toString(), brief }),
+  });
+  if (!commissioned.ok) {
+    throw new Error(`provider rejected the commission: HTTP ${commissioned.status}`);
+  }
+
+  const approveHash = await wallet.writeContract({
+    address: addresses.MockUSDC,
+    abi: MockUSDCAbi,
+    functionName: "approve",
+    args: [addresses.JobContract, amount],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+  const fundHash = await wallet.writeContract({
+    address: addresses.JobContract,
+    abi: JobContractAbi,
+    functionName: "fundJob",
+    args: [jobId],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: fundHash });
+  console.log(`[agent-a] job ${jobId} funded with ${formatUsdc(amount)} USDC — escrow held`);
+
+  return { jobId, brief, quote };
 }

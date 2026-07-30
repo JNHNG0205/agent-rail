@@ -7,10 +7,19 @@ beforeEach(() => {
 });
 
 test("composeBrief returns a brief with non-empty requirements", async () => {
-  const brief = await composeBrief("I need a poster for demo day");
+  const brief = await composeBrief("I need a poster for demo day", ["shows the title"]);
   assert.ok(isPosterBrief(brief));
   assert.ok(brief.requirements.length > 0);
   assert.equal(typeof brief.title, "string");
+});
+
+test("composeBrief adopts the quote's requirements verbatim", async () => {
+  // The terms the provider advertised must be byte-identical to the terms the
+  // evaluator grades against. That cannot rest on the model obeying a prompt,
+  // so composeBrief overwrites whatever it returned.
+  const advertised = ["shows the venue", "includes a QR code", "under 40 words"];
+  const brief = await composeBrief("poster for demo day", advertised);
+  assert.deepEqual(brief.requirements, advertised);
 });
 
 test("isPosterBrief rejects a malformed object", () => {
