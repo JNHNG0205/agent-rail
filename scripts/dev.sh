@@ -15,8 +15,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 1. Start Postgres and apply the schema. Must precede the indexer, which
-#    writes on its first event and dies if the tables are missing.
+# 1. Start Postgres. Must precede the indexer — Ponder creates its own tables
+#    on startup but needs a database to connect to first.
 echo "[dev] starting database…"
 npm run db:setup
 

@@ -12,6 +12,7 @@ export type {
   Job,
   JobRow,
   JobStateLabel,
+  JobOutcome,
   ContractAddresses,
   ContractName,
   PosterBrief,
@@ -30,7 +31,14 @@ export {
   JOB_TIMEOUT_BLOCKS,
   formatUsdc,
 } from "./src/constants";
-export { ZERO_ADDRESS, isDeployed, getAddresses, addresses, deployments } from "./src/addresses";
+export {
+  ZERO_ADDRESS,
+  isDeployed,
+  getAddresses,
+  addresses,
+  deployments,
+  deploymentBlocks,
+} from "./src/addresses";
 export { JobContractAbi } from "./src/abis/JobContract";
 export { EvaluatorModuleAbi } from "./src/abis/EvaluatorModule";
 export { IdentityRegistryAbi } from "./src/abis/IdentityRegistry";

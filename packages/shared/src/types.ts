@@ -26,55 +26,67 @@ export const JOB_STATE_BY_LABEL: Record<JobStateLabel, JobState> = {
   Terminal: JobState.Terminal,
 };
 
+/// Terminal covers three different endings that `state` alone cannot tell
+/// apart, so the indexer records which one happened.
+export type JobOutcome = "completed" | "cancelled" | "timeoutClaimed";
+
+/// A row from GET /api/agents. Every numeric column arrives as a string —
+/// Postgres returns `numeric` that way to avoid precision loss.
+///
+/// There is deliberately no `name`: IdentityRegistry.registerAgent takes only an
+/// address and stores no label, so nothing on-chain carries one. Resolve it in
+/// the UI with agentLabel(address).
 export interface Agent {
   address: `0x${string}`;
-  tokenId: number | null;
-  name: string;
-  reputation: number;
-  registeredAt: string | null; // ISO timestamp
+  tokenId: string | null;
+  reputation: string;
+  registeredAt: string | null; // block timestamp, seconds
 }
 
 /// Domain shape — what the chain gives you. The indexer builds this from
 /// decoded viem events, where amounts really are bigint.
 export interface Job {
-  id: number; // on-chain job id
+  id: bigint; // on-chain job id
   client: `0x${string}`;
   provider: `0x${string}`;
-  evaluator: `0x${string}`; // signs the approval that settles the job
+  evaluator: `0x${string}`; // signs the decision that settles or refunds
   amount: bigint; // USDC minor units (6 decimals)
   state: JobState;
   deliverableHash: `0x${string}` | null;
+  outcome: JobOutcome | null;
   createdBlock: bigint;
-  updatedAt: string | null; // ISO timestamp
+  updatedBlock: bigint;
 }
 
 /// Wire shape — exactly what GET /api/jobs returns. JSON cannot represent a
-/// bigint, so Postgres NUMERIC and BIGINT arrive as strings and `state` as its
+/// bigint, so every Postgres `numeric` arrives as a string and `state` as its
 /// label. Parse with toJob() only where you need arithmetic; to display an
 /// amount, formatUsdc(BigInt(row.amount)) is enough.
 export interface JobRow {
-  id: number;
+  id: string;
   client: `0x${string}`;
   provider: `0x${string}`;
   evaluator: `0x${string}`;
   amount: string;
   state: JobStateLabel;
   deliverableHash: `0x${string}` | null;
+  outcome: JobOutcome | null;
   createdBlock: string;
-  updatedAt: string | null;
+  updatedBlock: string;
 }
 
 export function toJob(row: JobRow): Job {
   return {
-    id: row.id,
+    id: BigInt(row.id),
     client: row.client,
     provider: row.provider,
     evaluator: row.evaluator,
     amount: BigInt(row.amount),
     state: JOB_STATE_BY_LABEL[row.state],
     deliverableHash: row.deliverableHash,
+    outcome: row.outcome,
     createdBlock: BigInt(row.createdBlock),
-    updatedAt: row.updatedAt,
+    updatedBlock: BigInt(row.updatedBlock),
   };
 }
 
@@ -112,13 +124,14 @@ export interface DeliverableReview {
 /// of an event, so unlike Job there is no bigint counterpart. `blockNumber` is
 /// a string for the same reason as JobRow: BIGINT does not survive JSON.
 export interface ChainEvent {
-  id: number;
+  id: string; // `${txHash}-${logIndex}`
+  chainId: number;
   contract: string;
   eventName: string;
-  jobId: number | null;
+  jobId: string | null;
   txHash: `0x${string}`;
-  blockNumber: string;
   logIndex: number; // position within the tx; with blockNumber gives chain order
+  blockNumber: string;
+  blockTimestamp: string; // seconds
   args: Record<string, unknown>;
-  createdAt: string; // ISO timestamp
 }

@@ -1,12 +1,14 @@
 #!/bin/bash
-# Bring up Postgres and apply the indexer schema. Idempotent — safe to re-run.
-# Usage: npm run db:setup
+# Bring up Postgres and wait until it is ready to accept connections.
+# Idempotent — safe to re-run. Usage: npm run db:setup
+#
+# There is no schema to apply: Ponder owns the tables and creates them from
+# packages/indexer/ponder.schema.ts on startup. This script only has to make
+# sure a healthy database is listening before the indexer tries to connect.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-
-SCHEMA="packages/indexer/src/db/schema.sql"
 
 if ! docker info >/dev/null 2>&1; then
   echo "[db] Docker is not running. Start Docker Desktop and retry." >&2
@@ -29,8 +31,4 @@ if [ "$(docker inspect -f '{{.State.Health.Status}}' agentrail-db 2>/dev/null)" 
   exit 1
 fi
 
-echo "[db] applying ${SCHEMA}…"
-docker exec -i agentrail-db psql -q -U postgres -d agentrail < "$SCHEMA"
-
-echo "[db] ready — $(docker exec agentrail-db psql -tAU postgres -d agentrail -c \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'") tables in agentrail"
+echo "[db] ready — Ponder will create its tables on first start."
