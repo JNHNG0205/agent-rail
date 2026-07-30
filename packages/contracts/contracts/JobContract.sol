@@ -7,6 +7,10 @@ interface IReputationRegistry {
     function recordCompletion(address agent) external;
 }
 
+interface IIdentityRegistry {
+    function isRegistered(address agent) external view returns (bool);
+}
+
 /// @title JobContract — ERC-8183 job lifecycle + USDC escrow.
 /// @notice Client creates a job, funds it into escrow, provider submits a
 ///         deliverable hash, and settlement releases (or refunds) the escrow.
@@ -38,6 +42,7 @@ contract JobContract {
     address public owner;
     address public evaluatorModule;
     address public reputationRegistry;
+    address public identityRegistry;
 
     // jobId => Job
     mapping(uint256 => Job) public jobs;
@@ -48,6 +53,7 @@ contract JobContract {
     error InvalidState(uint256 jobId, JobState current, JobState expected);
     error Unauthorized(address caller);
     error TimeoutNotReached(uint256 currentBlock, uint256 deadline);
+    error NotRegistered(address agent);
 
     event JobCreated(uint256 indexed jobId, address indexed client, address indexed provider, address evaluator, uint256 amount);
     event JobFunded(uint256 indexed jobId, uint256 amount);
@@ -57,6 +63,7 @@ contract JobContract {
     event JobTimeoutClaimed(uint256 indexed jobId, address indexed provider, uint256 amount);
     event EvaluatorModuleUpdated(address indexed newEvaluatorModule);
     event ReputationRegistryUpdated(address indexed newReputationRegistry);
+    event IdentityRegistryUpdated(address indexed newIdentityRegistry);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert Unauthorized(msg.sender);
@@ -111,6 +118,25 @@ contract JobContract {
         emit ReputationRegistryUpdated(_reputationRegistry);
     }
 
+    /// @notice Set or update the IdentityRegistry address.
+    function setIdentityRegistry(address _identityRegistry) external onlyOwner {
+        if (_identityRegistry == address(0)) revert ZeroAddress();
+        identityRegistry = _identityRegistry;
+        emit IdentityRegistryUpdated(_identityRegistry);
+    }
+
+    /// @dev Reverts unless every party to a job holds an identity token. Skipped
+    ///      when no registry is wired, matching how reputationRegistry is
+    ///      treated — a deployment that never calls setIdentityRegistry keeps
+    ///      the previous permissionless behaviour. deploy.ts always wires it.
+    function _requireRegistered(address client, address provider, address evaluator) private view {
+        if (identityRegistry == address(0)) return;
+        IIdentityRegistry registry = IIdentityRegistry(identityRegistry);
+        if (!registry.isRegistered(client)) revert NotRegistered(client);
+        if (!registry.isRegistered(provider)) revert NotRegistered(provider);
+        if (!registry.isRegistered(evaluator)) revert NotRegistered(evaluator);
+    }
+
     /// @notice Client opens a job targeting a specific provider and evaluator with default timeout.
     function createJob(address provider, address evaluator, uint256 amount) external returns (uint256 jobId) {
         return createJob(provider, evaluator, amount, DEFAULT_TIMEOUT_BLOCKS);
@@ -120,6 +146,7 @@ contract JobContract {
     function createJob(address provider, address evaluator, uint256 amount, uint256 timeoutBlocks) public returns (uint256 jobId) {
         if (provider == address(0) || evaluator == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+        _requireRegistered(msg.sender, provider, evaluator);
 
         uint256 effectiveTimeout = timeoutBlocks == 0 ? DEFAULT_TIMEOUT_BLOCKS : timeoutBlocks;
 

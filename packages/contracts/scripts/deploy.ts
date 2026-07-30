@@ -83,6 +83,9 @@ async function main() {
   console.log("\nConfiguring cross-contract permissions...");
   await jobContract.write.setEvaluatorModule([evaluatorModule.address]);
   await jobContract.write.setReputationRegistry([reputationRegistry.address]);
+  // Without this call createJob stays permissionless — the identity gate is
+  // only active once JobContract knows which registry to ask.
+  await jobContract.write.setIdentityRegistry([identityRegistry.address]);
   await reputationRegistry.write.setJobContract([jobContract.address]);
 
   console.log("All contracts wired successfully!");

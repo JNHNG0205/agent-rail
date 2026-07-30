@@ -36,6 +36,17 @@ export const JobContractAbi = [
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "agent",
+        "type": "address"
+      }
+    ],
+    "name": "NotRegistered",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "currentBlock",
         "type": "uint256"
@@ -100,6 +111,19 @@ export const JobContractAbi = [
       }
     ],
     "name": "EvaluatorModuleUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newIdentityRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "IdentityRegistryUpdated",
     "type": "event"
   },
   {
@@ -436,6 +460,19 @@ export const JobContractAbi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "identityRegistry",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -537,6 +574,19 @@ export const JobContractAbi = [
       }
     ],
     "name": "setEvaluatorModule",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_identityRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "setIdentityRegistry",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
