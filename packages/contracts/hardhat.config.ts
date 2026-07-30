@@ -1,6 +1,13 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox-viem";
-import "dotenv/config";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Resolved against this file, not the process cwd. `import "dotenv/config"` reads
+// ./.env relative to wherever the command was launched — for a workspace script
+// that is packages/contracts, which has no .env, so every BASE_SEPOLIA_* key was
+// silently invisible and baseSepolia came up with zero accounts.
+dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 
 // Order matters and must mirror the local chain, where Hardhat account #0 is
 // both the deployer and Agent A: deploy.ts takes getWalletClients()[0] as the

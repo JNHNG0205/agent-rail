@@ -44,8 +44,15 @@ async function main() {
     }
 
     const mintHash = await usdc.write.mint([address, mintAmount]);
-    await publicClient.waitForTransactionReceipt({ hash: mintHash });
-    const balance = await usdc.read.balanceOf([address]);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash });
+
+    // Pinned to the block the mint landed in. A plain latest-block read races
+    // the RPC on a public endpoint: the request can be load-balanced to a node
+    // that has not synced the new state yet, and the balance comes back 0 even
+    // though the mint succeeded.
+    const balance = await usdc.read.balanceOf([address], {
+      blockNumber: receipt.blockNumber,
+    });
     console.log(`  ${label} — balance ${balance / 10n ** 6n} USDC`);
   }
 

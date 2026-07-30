@@ -11,8 +11,16 @@ export const deployments: Record<number, ContractAddresses> = {
     ReputationRegistry: "0x0000000000000000000000000000000000000000",
     EvaluatorModule: "0x0000000000000000000000000000000000000000",
   },
+  "84532": {
+    MockUSDC: "0x75e9e2eefc3eca12ac4d6107b28b8b930486d021",
+    JobContract: "0x25c7852c13b3e624fb26589360c4634651dd83cb",
+    IdentityRegistry: "0x3290f750e3670798daad34656bc733fb64334220",
+    ReputationRegistry: "0x88126a66e0d72514957c485bd91843b1252f0ab6",
+    EvaluatorModule: "0x7089233e15ecad5f840d0ca1b458a4965a214963",
+  },
 };
 
 export const deploymentBlocks: Record<number, number> = {
   "31337": 0,
+  "84532": 44819047,
 };

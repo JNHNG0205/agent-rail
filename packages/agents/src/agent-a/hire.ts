@@ -1,8 +1,11 @@
+import { parseEventLogs } from "viem";
 import {
   addresses,
   JobContractAbi,
   MockUSDCAbi,
   formatUsdc,
+  CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
   type PosterBrief,
 } from "@agentrail/shared";
 import { publicClient, agentA } from "../lib/wallet.js";
@@ -37,9 +40,16 @@ function isQuote(value: unknown): value is QuoteResponse {
 /// Address of the evaluator this client assigns. Per ACP the client chooses the
 /// evaluator, so it is Agent A's configuration rather than the provider's. Only
 /// the address is needed here — never Agent C's key.
+///
+/// Selected by chain for the same reason the private keys are: Agent C is a
+/// different keypair on testnet, and naming the local address there would put a
+/// stranger on the job. The contract would then reject Agent C's signature with
+/// NotAuthorizedEvaluator, stranding the escrow until the timeout.
 function evaluatorAddress(): `0x${string}` {
-  const value = process.env.EVALUATOR_ADDRESS;
-  if (!value) throw new Error("EVALUATOR_ADDRESS is not set");
+  const prefix = CHAIN_ID === BASE_SEPOLIA_CHAIN_ID ? "BASE_SEPOLIA_" : "";
+  const name = `${prefix}EVALUATOR_ADDRESS`;
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set (required for chain ${CHAIN_ID})`);
   return value as `0x${string}`;
 }
 
@@ -79,13 +89,15 @@ export async function hire(agentBUrl: string, goal: string): Promise<HireResult>
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
 
-  // createJob returns the id, but a return value is not readable from a
-  // receipt — recover it from the event emitted in the same block.
-  const created = await publicClient.getContractEvents({
-    address: addresses.JobContract,
+  // createJob returns the id, but a return value is not readable from a receipt
+  // — recover it from the event. Decode the receipt's own logs rather than
+  // querying the chain again by block: a second round trip against a
+  // load-balanced public RPC can hit a node that has not seen the block yet,
+  // which surfaces as a zero blockHash and "block not found".
+  const created = parseEventLogs({
     abi: JobContractAbi,
     eventName: "JobCreated",
-    blockHash: receipt.blockHash,
+    logs: receipt.logs,
   });
   const mine = created.find(
     (e) => e.args.client?.toLowerCase() === account.address.toLowerCase(),

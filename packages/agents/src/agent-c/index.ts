@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { addresses, JobContractAbi, agentLabel, type PosterBrief } from "@agentrail/shared";
 import { publicClient, agentC } from "../lib/wallet.js";
+import { watchEvents } from "../lib/watch.js";
 import { review } from "./review.js";
 import { approve } from "./approve.js";
 
@@ -79,12 +80,13 @@ function main() {
   const providerUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
   console.log(`[agent-c] evaluator ${account.address}, provider at ${providerUrl}`);
 
-  const unwatch = publicClient.watchContractEvent({
+  const unwatch = watchEvents({
     address: addresses.JobContract,
     abi: JobContractAbi,
     eventName: "DeliverableSubmitted",
-    onLogs: async (logs) => {
-      for (const log of logs) {
+    onLogs: async (raw) => {
+      for (const entry of raw) {
+        const log = entry as { args: { jobId?: bigint } };
         const jobId = log.args.jobId;
         if (jobId === undefined) continue;
         try {
@@ -97,7 +99,8 @@ function main() {
         }
       }
     },
-    onError: (err) => console.error("[agent-c] watch error:", err),
+    onError: (err) =>
+      console.error("[agent-c] watch error:", err instanceof Error ? err.message : err),
   });
 
   const shutdown = () => {

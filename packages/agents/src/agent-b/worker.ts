@@ -1,5 +1,6 @@
 import { addresses, JobContractAbi, formatUsdc } from "@agentrail/shared";
 import { publicClient, agentB } from "../lib/wallet.js";
+import { watchEvents } from "../lib/watch.js";
 import { hashDeliverable } from "../lib/hash.js";
 import { runTask } from "./llm.js";
 import { getCommission, rememberDeliverable } from "./server.js";
@@ -10,12 +11,13 @@ import { getCommission, rememberDeliverable } from "./server.js";
 export function startWorker(): () => void {
   const { wallet, account } = agentB();
 
-  const unwatch = publicClient.watchContractEvent({
+  const unwatch = watchEvents({
     address: addresses.JobContract,
     abi: JobContractAbi,
     eventName: "JobFunded",
-    onLogs: async (logs) => {
-      for (const log of logs) {
+    onLogs: async (raw) => {
+      for (const entry of raw) {
+        const log = entry as { args: { jobId?: bigint } };
         const jobId = log.args.jobId;
         if (jobId === undefined) continue;
 
@@ -69,7 +71,11 @@ export function startWorker(): () => void {
         }
       }
     },
-    onError: (err) => console.error("[agent-b] worker watch error:", err),
+    onError: (err) =>
+      console.error(
+        "[agent-b] worker watch error:",
+        err instanceof Error ? err.message : err,
+      ),
   });
 
   return unwatch;
