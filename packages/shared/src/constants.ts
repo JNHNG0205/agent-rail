@@ -4,6 +4,7 @@ export const LOCAL_CHAIN_ID = 31337;
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
 
 export const LOCAL_RPC_URL = "http://127.0.0.1:8545";
+export const BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
 
 /// Chain metadata for logging and explorer links. Local has no explorer.
 export const CHAIN_META: Record<number, { name: string; explorer: string | null }> = {
@@ -20,10 +21,6 @@ const rawChainId = hasProcessEnv
   ? process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID
   : undefined;
 
-const rawRpcUrl = hasProcessEnv
-  ? process.env.NEXT_PUBLIC_RPC_URL || process.env.RPC_URL
-  : undefined;
-
 const parsedChainId = Number(rawChainId);
 
 /// Active chain. Defaults to local so the demo path needs no configuration.
@@ -31,7 +28,22 @@ export const CHAIN_ID = Number.isInteger(parsedChainId) && parsedChainId > 0
   ? parsedChainId
   : LOCAL_CHAIN_ID;
 
-export const RPC_URL = rawRpcUrl || LOCAL_RPC_URL;
+/// The endpoint is chosen by the active chain rather than read from one shared
+/// variable, so switching chains takes CHAIN_ID alone.
+///
+/// A single RPC_URL made the two settings independent, and a mismatch stayed
+/// invisible until a write: viem signs for CHAIN_ID, the node rejects a foreign
+/// chain id, and the only clue is "invalid chain ID" against a stack of decoded
+/// call data. Reading a per-chain variable makes that state unreachable, and
+/// reuses the names the indexer already reads.
+const rawRpcUrl = !hasProcessEnv
+  ? undefined
+  : CHAIN_ID === BASE_SEPOLIA_CHAIN_ID
+    ? process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || process.env.BASE_SEPOLIA_RPC_URL
+    : process.env.NEXT_PUBLIC_RPC_URL || process.env.RPC_URL;
+
+export const RPC_URL =
+  rawRpcUrl || (CHAIN_ID === BASE_SEPOLIA_CHAIN_ID ? BASE_SEPOLIA_RPC_URL : LOCAL_RPC_URL);
 
 export const CHAIN_NAME = CHAIN_META[CHAIN_ID]?.name ?? `chain ${CHAIN_ID}`;
 

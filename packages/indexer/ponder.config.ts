@@ -6,6 +6,7 @@ import {
   LOCAL_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   LOCAL_RPC_URL,
+  BASE_SEPOLIA_RPC_URL,
   JobContractAbi,
   IdentityRegistryAbi,
   ReputationRegistryAbi,
@@ -28,7 +29,7 @@ const CANDIDATES = [
   {
     name: "baseSepolia",
     id: BASE_SEPOLIA_CHAIN_ID,
-    rpc: process.env.BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org",
+    rpc: process.env.BASE_SEPOLIA_RPC_URL ?? BASE_SEPOLIA_RPC_URL,
     disableCache: false,
   },
 ] as const;
