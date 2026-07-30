@@ -18,12 +18,23 @@ export function walletFor(privateKey: Hex) {
   return { account, wallet };
 }
 
-function keyFor(name: string): Hex {
+/// Which env var holds an agent's key depends on the chain, deliberately.
+///
+/// The local AGENT_*_PRIVATE_KEY values are Hardhat's published accounts — their
+/// keys are in Hardhat's own docs, so anything sent to those addresses on a
+/// public network is swept within seconds. Selecting the variable by chain makes
+/// it impossible to point the local keys at Base Sepolia by forgetting to swap a
+/// value, and avoids keeping the same secret under two names.
+function keyFor(agent: "A" | "B" | "C"): Hex {
+  const prefix = CHAIN_ID === BASE_SEPOLIA_CHAIN_ID ? "BASE_SEPOLIA_" : "";
+  const name = `${prefix}AGENT_${agent}_PRIVATE_KEY`;
   const key = process.env[name];
-  if (!key) throw new Error(`${name} is not set`);
+  if (!key) {
+    throw new Error(`${name} is not set (required for chain ${CHAIN_ID})`);
+  }
   return key as Hex;
 }
 
-export const agentA = () => walletFor(keyFor("AGENT_A_PRIVATE_KEY"));
-export const agentB = () => walletFor(keyFor("AGENT_B_PRIVATE_KEY"));
-export const agentC = () => walletFor(keyFor("AGENT_C_PRIVATE_KEY"));
+export const agentA = () => walletFor(keyFor("A"));
+export const agentB = () => walletFor(keyFor("B"));
+export const agentC = () => walletFor(keyFor("C"));
