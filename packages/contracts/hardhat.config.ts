@@ -9,16 +9,21 @@ import * as path from "path";
 // silently invisible and baseSepolia came up with zero accounts.
 dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 
-// Order matters and must mirror the local chain, where Hardhat account #0 is
-// both the deployer and Agent A: deploy.ts takes getWalletClients()[0] as the
-// deployer, and seed.ts destructures [agentA, agentB, agentC] from the same
-// list. Supplying only one key here left agentB and agentC undefined on
-// testnet, so seeding crashed — invisible locally because Hardhat injects 20
-// accounts of its own.
+// Order matters and mirrors the local chain: index 0 is the deployer and
+// indices 1-3 are agents A, B and C. deploy.ts takes index 0 and seed.ts reads
+// 1-3, so a reordering here silently changes who owns the contracts.
+//
+// The deployer is deliberately a fourth account rather than Agent A. It owns
+// JobContract and ReputationRegistry, and those owners can re-point the identity
+// registry, the evaluator module and the reputation registry — so giving that
+// power to the client would let one party to a job rewrite the rules that
+// constrain it, which is exactly what the escrow and the independent evaluator
+// exist to prevent.
 //
 // Testnet keys are absent in a default local setup; an empty array leaves
 // baseSepolia configured but unusable rather than failing the config load.
 const baseSepoliaAccounts = [
+  process.env.BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY,
   process.env.BASE_SEPOLIA_AGENT_A_PRIVATE_KEY,
   process.env.BASE_SEPOLIA_AGENT_B_PRIVATE_KEY,
   process.env.BASE_SEPOLIA_AGENT_C_PRIVATE_KEY,

@@ -1,7 +1,7 @@
 import hre from "hardhat";
 import fs from "fs";
 import path from "path";
-import { walletClients } from "./lib/clients";
+import { walletClients, nonceSequencer } from "./lib/clients";
 import {
   deployments,
   deploymentBlocks,
@@ -53,9 +53,10 @@ function writeSharedDeployments(
 
 async function main() {
   console.log("Deploying AgentRail system contracts with Viem...");
+  const publicClient = await hre.viem.getPublicClient();
   // Captured before the first deploy so the indexer never starts after an
   // event it needed. A few extra blocks scanned is harmless; missing one is not.
-  const startBlock = Number(await (await hre.viem.getPublicClient()).getBlockNumber());
+  const startBlock = Number(await publicClient.getBlockNumber());
   const [deployer] = await walletClients();
   if (!deployer) throw new Error("no deployer account configured for this network");
   console.log("Deployer account:", deployer.account.address);
@@ -86,7 +87,12 @@ async function main() {
 
   // 6. Wire permissions
   console.log("\nConfiguring cross-contract permissions...");
-  const publicClient = await hre.viem.getPublicClient();
+
+  // Nonces come from a local counter rather than from the endpoint per call — see
+  // nonceSequencer. The deploys above are safe without it because deployContract
+  // waits for a confirmation and they are spaced far enough apart; these four
+  // calls are not.
+  const nextNonce = await nonceSequencer(publicClient, deployer.account.address);
 
   // write() returns as soon as the transaction is broadcast. Waiting for each
   // receipt is what turns a reverted wiring call into a failed deploy instead of
@@ -100,21 +106,21 @@ async function main() {
 
   await wire(
     "JobContract.setEvaluatorModule",
-    jobContract.write.setEvaluatorModule([evaluatorModule.address]),
+    jobContract.write.setEvaluatorModule([evaluatorModule.address], { nonce: nextNonce() }),
   );
   await wire(
     "JobContract.setReputationRegistry",
-    jobContract.write.setReputationRegistry([reputationRegistry.address]),
+    jobContract.write.setReputationRegistry([reputationRegistry.address], { nonce: nextNonce() }),
   );
   // Without this call createJob stays permissionless — the identity gate is
   // only active once JobContract knows which registry to ask.
   await wire(
     "JobContract.setIdentityRegistry",
-    jobContract.write.setIdentityRegistry([identityRegistry.address]),
+    jobContract.write.setIdentityRegistry([identityRegistry.address], { nonce: nextNonce() }),
   );
   await wire(
     "ReputationRegistry.setJobContract",
-    reputationRegistry.write.setJobContract([jobContract.address]),
+    reputationRegistry.write.setJobContract([jobContract.address], { nonce: nextNonce() }),
   );
 
   console.log("All contracts wired successfully!");

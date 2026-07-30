@@ -1,6 +1,6 @@
 import hre from "hardhat";
 import { getAddresses, agentLabel } from "@agentrail/shared";
-import { walletClients } from "./lib/clients";
+import { walletClients, nonceSequencer } from "./lib/clients";
 
 /// Seeds a fresh demo: registers all three agents in the IdentityRegistry and
 /// mints MockUSDC so a hire→settle flow has funds. Run after deploy.
@@ -18,19 +18,22 @@ async function main() {
   const chainId = await publicClient.getChainId();
   const addresses = getAddresses(chainId);
 
-  const wallets = (await walletClients()).slice(0, 3);
-  const [owner] = wallets;
-  if (!owner) throw new Error("no accounts configured for this network");
+  // Index 0 is the deployer, 1-3 are the agents. Seeding never acts as an agent:
+  // registerAgent takes the subject as an argument and MockUSDC.mint is
+  // unrestricted, so the agents appear here only as addresses. Keeping the
+  // deployer as the sole sender also means an agent never needs gas to be seeded.
+  const [deployer, ...agents] = (await walletClients()).slice(0, 4);
+  if (!deployer) throw new Error("no accounts configured for this network");
+  if (agents.length < 3) {
+    throw new Error(`expected a deployer and 3 agents, got ${agents.length + 1} accounts`);
+  }
 
-  // Both writes below are the owner's, not each agent's: registerAgent takes the
-  // agent as an argument and mint is owner-only. The other two clients are here
-  // only for their addresses.
-  const asOwner = { client: { wallet: owner } };
-  const usdc = await hre.viem.getContractAt("MockUSDC", addresses.MockUSDC, asOwner);
+  const asDeployer = { client: { wallet: deployer } };
+  const usdc = await hre.viem.getContractAt("MockUSDC", addresses.MockUSDC, asDeployer);
   const identity = await hre.viem.getContractAt(
     "IdentityRegistry",
     addresses.IdentityRegistry,
-    asOwner,
+    asDeployer,
   );
 
   // 1_000 USDC each (6 decimals). Agent C never pays, but funding it keeps the
@@ -62,9 +65,14 @@ async function main() {
     throw new Error(`${what} failed after 5 attempts: ${detail}`);
   }
 
-  console.log(`Seeding chain ${chainId}…`);
+  // Local nonce counter for the same reason deploy.ts uses one: a per-call
+  // eth_getTransactionCount can come from a node that has not applied the block
+  // holding the previous write, handing out a nonce already spent.
+  const nextNonce = await nonceSequencer(publicClient, deployer.account.address);
 
-  for (const wallet of wallets) {
+  console.log(`Seeding chain ${chainId} as ${agentLabel(deployer.account.address)}…`);
+
+  for (const wallet of agents) {
     const address = wallet.account.address;
     const label = agentLabel(address);
 
@@ -76,7 +84,7 @@ async function main() {
     if (alreadyRegistered) {
       console.log(`  ${label} — already registered, skipping`);
     } else {
-      const hash = await identity.write.registerAgent([address]);
+      const hash = await identity.write.registerAgent([address], { nonce: nextNonce() });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error(`${label}: registerAgent reverted`);
       const tokenId = await readWithRetry(`${label} getAgentId`, () =>
@@ -85,7 +93,7 @@ async function main() {
       console.log(`  ${label} — registered, tokenId ${tokenId}`);
     }
 
-    const mintHash = await usdc.write.mint([address, mintAmount]);
+    const mintHash = await usdc.write.mint([address, mintAmount], { nonce: nextNonce() });
     const receipt = await publicClient.waitForTransactionReceipt({ hash: mintHash });
     if (receipt.status !== "success") throw new Error(`${label}: mint reverted`);
 
