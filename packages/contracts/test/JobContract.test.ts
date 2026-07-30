@@ -474,11 +474,9 @@ describe("JobContract — identity gating", function () {
       account: client.account,
     });
 
-    const created = await job.read.getJob([0n]);
+    const created = (await job.read.getJob([0n])) as { state: number; evaluator: string };
     expect(created.state).to.equal(0);
-    expect((created.evaluator as string).toLowerCase()).to.equal(
-      evaluator.account.address.toLowerCase()
-    );
+    expect(created.evaluator.toLowerCase()).to.equal(evaluator.account.address.toLowerCase());
   });
 
   it("only the owner may set the identity registry", async function () {
