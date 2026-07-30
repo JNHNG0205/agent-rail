@@ -2,10 +2,19 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox-viem";
 import "dotenv/config";
 
-// Testnet keys are absent in the default local setup; an empty accounts array
-// leaves baseSepolia configured but unusable rather than failing to load.
+// Order matters and must mirror the local chain, where Hardhat account #0 is
+// both the deployer and Agent A: deploy.ts takes getWalletClients()[0] as the
+// deployer, and seed.ts destructures [agentA, agentB, agentC] from the same
+// list. Supplying only one key here left agentB and agentC undefined on
+// testnet, so seeding crashed — invisible locally because Hardhat injects 20
+// accounts of its own.
+//
+// Testnet keys are absent in a default local setup; an empty array leaves
+// baseSepolia configured but unusable rather than failing the config load.
 const baseSepoliaAccounts = [
-  process.env.BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY,
+  process.env.BASE_SEPOLIA_AGENT_A_PRIVATE_KEY,
+  process.env.BASE_SEPOLIA_AGENT_B_PRIVATE_KEY,
+  process.env.BASE_SEPOLIA_AGENT_C_PRIVATE_KEY,
 ].filter((key): key is string => Boolean(key));
 
 const config: HardhatUserConfig = {
