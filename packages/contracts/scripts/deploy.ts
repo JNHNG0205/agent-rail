@@ -1,6 +1,7 @@
 import hre from "hardhat";
 import fs from "fs";
 import path from "path";
+import { walletClients } from "./lib/clients";
 import {
   deployments,
   deploymentBlocks,
@@ -32,10 +33,9 @@ function renderEntry(chainId: number, addrs: ContractAddresses): string {
   return `  "${chainId}": {\n${fields}\n  },`;
 }
 
-/// Every consumer imports addresses from @agentrail/shared, so the deploy must
-/// write there as well as to deployed-addresses.json. Merge rather than
-/// replace: deploying to testnet must not wipe the local entry, or the other
-/// network's agents and indexer break.
+/// Every consumer imports addresses from @agentrail/shared, so the deploy writes
+/// there. Merge rather than replace: deploying to testnet must not wipe the local
+/// entry, or the other network's agents and indexer break.
 function writeSharedDeployments(
   chainId: number,
   deployed: ContractAddresses,
@@ -56,37 +56,66 @@ async function main() {
   // Captured before the first deploy so the indexer never starts after an
   // event it needed. A few extra blocks scanned is harmless; missing one is not.
   const startBlock = Number(await (await hre.viem.getPublicClient()).getBlockNumber());
-  const [deployer] = await hre.viem.getWalletClients();
+  const [deployer] = await walletClients();
+  if (!deployer) throw new Error("no deployer account configured for this network");
   console.log("Deployer account:", deployer.account.address);
 
+  // Every deploy and wiring call goes through this one signer, so the whole
+  // script uses a single nonce sequence and one signing path.
+  const asDeployer = { client: { wallet: deployer } };
+
   // 1. Deploy MockUSDC
-  const usdc = await hre.viem.deployContract("MockUSDC");
+  const usdc = await hre.viem.deployContract("MockUSDC", [], asDeployer);
   console.log("MockUSDC deployed to:", usdc.address);
 
   // 2. Deploy JobContract
-  const jobContract = await hre.viem.deployContract("JobContract", [usdc.address]);
+  const jobContract = await hre.viem.deployContract("JobContract", [usdc.address], asDeployer);
   console.log("JobContract deployed to:", jobContract.address);
 
   // 3. Deploy IdentityRegistry
-  const identityRegistry = await hre.viem.deployContract("IdentityRegistry");
+  const identityRegistry = await hre.viem.deployContract("IdentityRegistry", [], asDeployer);
   console.log("IdentityRegistry deployed to:", identityRegistry.address);
 
   // 4. Deploy ReputationRegistry
-  const reputationRegistry = await hre.viem.deployContract("ReputationRegistry", [deployer.account.address]);
+  const reputationRegistry = await hre.viem.deployContract("ReputationRegistry", [deployer.account.address], asDeployer);
   console.log("ReputationRegistry deployed to:", reputationRegistry.address);
 
   // 5. Deploy EvaluatorModule
-  const evaluatorModule = await hre.viem.deployContract("EvaluatorModule", [jobContract.address]);
+  const evaluatorModule = await hre.viem.deployContract("EvaluatorModule", [jobContract.address], asDeployer);
   console.log("EvaluatorModule deployed to:", evaluatorModule.address);
 
   // 6. Wire permissions
   console.log("\nConfiguring cross-contract permissions...");
-  await jobContract.write.setEvaluatorModule([evaluatorModule.address]);
-  await jobContract.write.setReputationRegistry([reputationRegistry.address]);
+  const publicClient = await hre.viem.getPublicClient();
+
+  // write() returns as soon as the transaction is broadcast. Waiting for each
+  // receipt is what turns a reverted wiring call into a failed deploy instead of
+  // a deployment that looks complete and is quietly half-wired.
+  async function wire(label: string, send: Promise<`0x${string}`>): Promise<void> {
+    const hash = await send;
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${label} reverted (tx ${hash})`);
+    console.log(`  ${label}`);
+  }
+
+  await wire(
+    "JobContract.setEvaluatorModule",
+    jobContract.write.setEvaluatorModule([evaluatorModule.address]),
+  );
+  await wire(
+    "JobContract.setReputationRegistry",
+    jobContract.write.setReputationRegistry([reputationRegistry.address]),
+  );
   // Without this call createJob stays permissionless — the identity gate is
   // only active once JobContract knows which registry to ask.
-  await jobContract.write.setIdentityRegistry([identityRegistry.address]);
-  await reputationRegistry.write.setJobContract([jobContract.address]);
+  await wire(
+    "JobContract.setIdentityRegistry",
+    jobContract.write.setIdentityRegistry([identityRegistry.address]),
+  );
+  await wire(
+    "ReputationRegistry.setJobContract",
+    reputationRegistry.write.setJobContract([jobContract.address]),
+  );
 
   console.log("All contracts wired successfully!");
 
@@ -98,15 +127,12 @@ async function main() {
     EvaluatorModule: evaluatorModule.address,
   };
 
-  fs.writeFileSync(path.join(__dirname, "../deployed-addresses.json"), JSON.stringify(addresses, null, 2));
-
-  const publicClient = await hre.viem.getPublicClient();
   const chainId = await publicClient.getChainId();
   writeSharedDeployments(chainId, addresses, startBlock);
 
   const chainName = CHAIN_META[chainId]?.name ?? `chain ${chainId}`;
   console.log(`\nDeployed to ${chainName} (${chainId})`);
-  console.log("Saved addresses to deployed-addresses.json and shared/src/deployments.ts");
+  console.log("Saved addresses to shared/src/deployments.ts");
 
   const explorer = CHAIN_META[chainId]?.explorer;
   if (explorer) {
