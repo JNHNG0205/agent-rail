@@ -61,15 +61,38 @@ const config: HardhatUserConfig = {
       accounts: baseSepoliaAccounts,
     },
   },
+  // Basescan authenticates uploads with an API key, so it is enabled only when
+  // one is present — otherwise `hardhat verify` fails on a blank key before
+  // trying anything else.
+  //
+  // apiKey is a bare string, not { baseSepolia: ... }. The per-network form
+  // selects Etherscan's V1 API, which is retired and answers every request with
+  // "You are using a deprecated V1 endpoint". A single key routes through V2,
+  // which covers every chain from one endpoint and one credential.
   etherscan: {
-    apiKey: { baseSepolia: process.env.BASESCAN_API_KEY ?? "" },
+    enabled: Boolean(process.env.BASESCAN_API_KEY),
+    apiKey: process.env.BASESCAN_API_KEY ?? "",
+  },
+  // Blockscout takes no API key, so verification needs no credential at all and
+  // a Basescan key is an upgrade rather than a blocker. It also gives a
+  // browsable page with read/write tabs, which is the useful part for a demo.
+  //
+  // Sourcify is the other keyless option and is deliberately off: hardhat-verify
+  // 2.1.3 calls its v1 API, which is in a brownout until 2027-01-08 and answers
+  // 503 telling clients to migrate to v2. Leaving it enabled only adds a
+  // guaranteed error to every verify run.
+  sourcify: {
+    enabled: false,
+  },
+  blockscout: {
+    enabled: true,
     customChains: [
       {
         network: "baseSepolia",
         chainId: 84532,
         urls: {
-          apiURL: "https://api-sepolia.basescan.org/api",
-          browserURL: "https://sepolia.basescan.org",
+          apiURL: "https://base-sepolia.blockscout.com/api",
+          browserURL: "https://base-sepolia.blockscout.com",
         },
       },
     ],
