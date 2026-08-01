@@ -3,6 +3,8 @@ import {
   deployments,
   deploymentBlocks,
   isDeployed,
+  CHAIN_ID,
+  CHAIN_META,
   LOCAL_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   LOCAL_RPC_URL,
@@ -34,11 +36,25 @@ const CANDIDATES = [
   },
 ] as const;
 
-const active = CANDIDATES.filter((c) => isDeployed(c.id));
+/// Index exactly the chain the rest of the stack is pointed at.
+///
+/// Indexing every deployed chain at once corrupts the data rather than merely
+/// showing too much of it: `job` is keyed by jobId alone and `agent` by address
+/// alone, so local job 0 and Base Sepolia job 0 are the same row and whichever
+/// syncs last overwrites the other. A local demo was serving testnet jobs
+/// through /api/jobs for exactly this reason.
+///
+/// CHAIN_ID already selects the chain for the agents, the web app and the
+/// deployment table, so following it here makes the indexer consistent with
+/// everything else instead of being the one component with its own idea of
+/// which network is live.
+const active = CANDIDATES.filter((c) => c.id === CHAIN_ID && isDeployed(c.id));
 
 if (active.length === 0) {
+  const name = CHAIN_META[CHAIN_ID]?.name ?? `chain ${CHAIN_ID}`;
   throw new Error(
-    "No chain has an AgentRail deployment. Run `npm run deploy` (or deploy:base-sepolia) first.",
+    `No AgentRail deployment on ${name} (CHAIN_ID=${CHAIN_ID}). ` +
+      `Deploy to it first, or set CHAIN_ID to a chain that has one.`,
   );
 }
 
