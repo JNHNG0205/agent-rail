@@ -22,12 +22,17 @@
     "indexer": "npm -w packages/indexer run start",
     "web": "npm -w packages/web run dev",
     "agent:a": "npm -w packages/agents run start:a",
+    "agent:a:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:a",
     "agent:b": "npm -w packages/agents run start:b",
+    "agent:b:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:b",
     "agent:c": "npm -w packages/agents run start:c",
+    "agent:c:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:c",
     "test": "npm test --workspaces --if-present",
     "coverage": "npm -w packages/contracts run coverage",
     "dev": "bash scripts/dev.sh",
-    "demo:reset": "bash scripts/demo-reset.sh"
+    "dev:base-sepolia": "bash scripts/dev.sh base-sepolia",
+    "demo:reset": "bash scripts/demo-reset.sh",
+    "preflight:base-sepolia": "tsx scripts/preflight.ts"
   },
   "engines": {
     "node": ">=20"

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Kill any running stack processes and boot fresh — one command back to a clean
-# demo state. Usage: npm run demo:reset
+# demo state.
+#   npm run demo:reset                  -> local
+#   npm run demo:reset base-sepolia     -> the deployed testnet contracts
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -45,5 +47,7 @@ for port in 8545 4020 3000; do
 done
 
 echo "[demo-reset] restarting stack…"
-# dev.sh clears the indexed data itself, so the database needs nothing here.
-exec bash scripts/dev.sh
+# dev.sh handles the database itself: it clears the indexed data for a local run
+# (the chain restarts from genesis) and keeps it for testnet (the deployment is
+# unchanged, so re-syncing 86k blocks would be pure waste).
+exec bash scripts/dev.sh "${1:-local}"
