@@ -25,8 +25,26 @@ export function watchEvents(opts: {
   /// seen — matching watchContractEvent's behaviour.
   fromBlock?: bigint;
   intervalMs?: number;
+  /// Largest span asked for in one eth_getLogs call.
+  ///
+  /// Alchemy's free tier rejects any range wider than 10 blocks, and does it
+  /// with -32600 "Invalid Request", which viem surfaces as "JSON is not a valid
+  /// request object" — a message about malformed JSON for what is really a plan
+  /// limit. The damage is not the failed call but the wedge that follows: the
+  /// cursor only advances on success, so once the gap exceeds the cap every
+  /// later poll asks for the same too-wide range and the agent never recovers.
+  ///
+  /// The gap grows during normal work, because the cursor waits for onLogs —
+  /// Agent B spends an LLM call and a transaction there, which is easily more
+  /// than 10 blocks on a 2-second chain. So this is reached on any real run, not
+  /// only after an outage.
+  maxBlockRange?: bigint;
 }): () => void {
   const interval = opts.intervalMs ?? 2_000;
+  const maxRange = opts.maxBlockRange ?? 10n;
+  // Bound the work per tick so catching up cannot block the loop indefinitely;
+  // whatever is left is picked up on the next one.
+  const maxWindowsPerTick = 25;
   let cursor: bigint | undefined = opts.fromBlock;
   let stopped = false;
   let running = false;
@@ -44,16 +62,25 @@ export function watchEvents(opts: {
       }
       if (latest < cursor) return;
 
-      const logs = await publicClient.getContractEvents({
-        address: opts.address,
-        abi: opts.abi,
-        eventName: opts.eventName,
-        fromBlock: cursor,
-        toBlock: latest,
-      });
+      // Walk to the head in bounded windows, advancing the cursor after each one
+      // so a failure part-way only costs the windows not yet done.
+      let from: bigint = cursor;
+      for (let window = 0; window < maxWindowsPerTick && from <= latest; window++) {
+        const capped = from + maxRange - 1n;
+        const to: bigint = capped < latest ? capped : latest;
 
-      if (logs.length > 0) await opts.onLogs(logs);
-      cursor = latest + 1n;
+        const logs = await publicClient.getContractEvents({
+          address: opts.address,
+          abi: opts.abi,
+          eventName: opts.eventName,
+          fromBlock: from,
+          toBlock: to,
+        });
+
+        if (logs.length > 0) await opts.onLogs(logs);
+        from = to + 1n;
+        cursor = from;
+      }
     } catch (err) {
       // Leave the cursor where it is so the range is retried.
       opts.onError?.(err);
