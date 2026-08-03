@@ -54,15 +54,36 @@ trap cleanup EXIT INT TERM
 echo "[dev] starting database…"
 npm run db:setup
 
+# 2. Decide whether the indexed data can be kept.
+#
+#    Locally it never can: the Hardhat node starts from genesis every run, so the
+#    rows describe contracts that no longer exist. On testnet it usually can, and
+#    keeping it is the difference between resuming and refetching 86k blocks.
+#
+#    The exception is switching chains. Ponder refuses to start against a schema
+#    another app wrote, and says so as "Schema public was previously used by a
+#    different Ponder app" — which names neither the chain switch that caused it
+#    nor the fix. Detecting it here means the switch just works.
+drop_indexed=""
 if [ "$TARGET" = "local" ]; then
-  # 2. Drop the indexed data. The Hardhat node below starts from genesis every
-  #    run, so yesterday's rows describe contracts that no longer exist — and
-  #    Ponder refuses to start against a schema a different deployment wrote.
-  #    Leaving it also lets the API serve a previous run's jobs with a 200 while
-  #    the indexer is dead, which looks like working software.
-  echo "[dev] clearing indexed data…"
+  drop_indexed="the local chain restarts from genesis"
+else
+  indexed_chain="$(docker exec agentrail-db psql -U postgres -d agentrail -t -A \
+    -c "SELECT chain_id FROM event LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [ -n "$indexed_chain" ] && [ "$indexed_chain" != "$CHAIN_ID" ]; then
+    drop_indexed="indexed data is for chain ${indexed_chain}, target is ${CHAIN_ID}"
+  fi
+fi
+
+if [ -n "$drop_indexed" ]; then
+  # Leaving stale rows also lets the API answer 200 from a previous run while the
+  # indexer is dead, which looks like working software.
+  echo "[dev] clearing indexed data — ${drop_indexed}…"
   docker exec agentrail-db psql -U postgres -d agentrail -q \
     -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+fi
+
+if [ "$TARGET" = "local" ]; then
 
   # 3. Start the local chain and wait for it to answer, rather than sleeping a
   #    fixed guess — a slow machine would otherwise deploy into a node that is
