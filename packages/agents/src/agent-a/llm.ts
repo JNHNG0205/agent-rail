@@ -1,5 +1,5 @@
 import type { PosterBrief } from "@agentrail/shared";
-import { completeJson } from "../lib/llm.js";
+import { completeJson, type JsonSchema } from "../lib/llm.js";
 
 const SYSTEM = `You are a client agent that commissions design work from other agents.
 
@@ -47,6 +47,26 @@ const MOCK_BRIEF: PosterBrief = {
 /// them, but the result is overwritten with the quote's array regardless — the
 /// terms the provider advertised must be byte-identical to the terms the
 /// evaluator grades against, and that guarantee cannot rest on a model
+/// Mirrors PosterBrief. OpenRouter's strict mode requires every property listed
+/// in `required` and additionalProperties disabled, so this cannot drift from the
+/// interface without the guard rejecting the reply.
+const BRIEF_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Short poster headline." },
+    subtitle: { type: "string", description: "One supporting line." },
+    callToAction: { type: "string", description: "What the reader should do." },
+    palette: { type: "string", description: "Colour direction, e.g. 'deep blue and amber'." },
+    requirements: {
+      type: "array",
+      items: { type: "string" },
+      description: "Echo the given requirements back verbatim.",
+    },
+  },
+  required: ["title", "subtitle", "callToAction", "palette", "requirements"],
+  additionalProperties: false,
+} as const satisfies JsonSchema;
+
 /// following an instruction.
 export async function composeBrief(
   goal: string,
@@ -60,7 +80,14 @@ export async function composeBrief(
   ].join("\n");
 
   const brief = await completeJson<PosterBrief>(
-    { system: SYSTEM, user, mock: { ...MOCK_BRIEF, requirements }, maxTokens: 1000 },
+    {
+      system: SYSTEM,
+      user,
+      mock: { ...MOCK_BRIEF, requirements },
+      maxTokens: 1000,
+      schemaName: "poster_brief",
+      schema: BRIEF_SCHEMA,
+    },
     isPosterBrief,
   );
 

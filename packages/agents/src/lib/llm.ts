@@ -11,6 +11,22 @@ export interface JsonCompletionRequest<T> {
   user: string;
   mock: T;
   maxTokens?: number;
+  /// JSON Schema describing the reply, sent to OpenRouter as a structured
+  /// output. Without it the model is merely asked for JSON in the prompt and may
+  /// return prose, a fenced block or a differently shaped object — which for
+  /// Agent C means no verdict and an escrow left hanging until the timeout.
+  ///
+  /// OpenRouter requires strict schemas to list every property in `required` and
+  /// set `additionalProperties: false`; schemaName labels it in the request.
+  schema?: JsonSchema;
+  schemaName?: string;
+}
+
+export interface JsonSchema {
+  type: "object";
+  properties: Record<string, unknown>;
+  required: string[];
+  additionalProperties: false;
 }
 
 interface ChatCompletion {
@@ -46,7 +62,10 @@ function requireEnv(name: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function postChat(req: CompletionRequest): Promise<string> {
+async function postChat(
+  req: CompletionRequest,
+  schema?: { name: string; schema: JsonSchema },
+): Promise<string> {
   const apiKey = requireEnv("LLM_API_KEY");
   const model = requireEnv("LLM_MODEL");
   const baseUrl = process.env.LLM_BASE_URL ?? DEFAULT_BASE_URL;
@@ -58,6 +77,18 @@ async function postChat(req: CompletionRequest): Promise<string> {
       { role: "system", content: req.system },
       { role: "user", content: req.user },
     ],
+    ...(schema
+      ? {
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: schema.name, strict: true, schema: schema.schema },
+          },
+          // Route only to endpoints that actually implement structured outputs.
+          // A model can list support while an individual provider serving it does
+          // not, and OpenRouter would otherwise silently pick that provider.
+          provider: { require_parameters: true },
+        }
+      : {}),
   });
 
   let lastError = "";
@@ -125,13 +156,20 @@ export async function completeJson<T>(
     maxTokens: req.maxTokens,
   };
 
+  const structured = req.schema
+    ? { name: req.schemaName ?? "response", schema: req.schema }
+    : undefined;
+
   let lastError = "";
+  // The schema makes a malformed reply unlikely rather than impossible — a
+  // provider can still return prose on an error path — so the parse, the guard
+  // and the corrective retry all stay.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const user =
       attempt === 0
         ? base.user
         : `${base.user}\n\nYour previous reply was not valid JSON matching the required shape (${lastError}). Reply with the JSON object only.`;
-    const raw = await postChat({ ...base, user });
+    const raw = await postChat({ ...base, user }, structured);
     try {
       const parsed: unknown = JSON.parse(stripFences(raw));
       if (guard(parsed)) return parsed;

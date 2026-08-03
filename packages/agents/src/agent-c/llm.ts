@@ -1,5 +1,5 @@
 import type { DeliverableReview, PosterBrief } from "@agentrail/shared";
-import { completeJson } from "../lib/llm.js";
+import { completeJson, type JsonSchema } from "../lib/llm.js";
 
 const SYSTEM = `You are an independent evaluator agent. You judge whether delivered work
 satisfies the terms it was commissioned under. You did not commission the work and you did
@@ -43,6 +43,32 @@ function mockReview(brief: PosterBrief): DeliverableReview {
 
 /// Judge the deliverable against the brief. Never throws on a bad model reply — a failed
 /// review is a normal outcome that leads to refund, not an error.
+/// Mirrors DeliverableReview. `approve` is the field that decides whether escrow
+/// settles or refunds, so it is declared a boolean rather than left to a model
+/// that might otherwise answer "yes".
+const REVIEW_SCHEMA = {
+  type: "object",
+  properties: {
+    approve: {
+      type: "boolean",
+      description: "True only if every requirement is satisfied by the delivered SVG.",
+    },
+    reason: { type: "string", description: "One sentence explaining the decision." },
+    presentElements: {
+      type: "array",
+      items: { type: "string" },
+      description: "Requirements the SVG satisfies.",
+    },
+    missingElements: {
+      type: "array",
+      items: { type: "string" },
+      description: "Requirements the SVG does not satisfy.",
+    },
+  },
+  required: ["approve", "reason", "presentElements", "missingElements"],
+  additionalProperties: false,
+} as const satisfies JsonSchema;
+
 export async function reviewDeliverable(
   brief: PosterBrief,
   svg: string,
@@ -64,7 +90,14 @@ export async function reviewDeliverable(
 
   try {
     return await completeJson<DeliverableReview>(
-      { system: SYSTEM, user, mock: mockReview(brief), maxTokens: 1500 },
+      {
+        system: SYSTEM,
+        user,
+        mock: mockReview(brief),
+        maxTokens: 1500,
+        schemaName: "deliverable_review",
+        schema: REVIEW_SCHEMA,
+      },
       isDeliverableReview,
     );
   } catch (err) {
