@@ -1,9 +1,15 @@
 import "dotenv/config";
-import { addresses, JobContractAbi, agentLabel, type PosterBrief } from "@agentrail/shared";
+import {
+  addresses,
+  JobContractAbi,
+  agentLabel,
+  type PosterBrief,
+} from "@agentrail/shared";
 import { publicClient, agentC } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
 import { review } from "./review.js";
 import { approve } from "./approve.js";
+import { pendingJobIds } from "./recover.js";
 
 /// Agent C (evaluator) entry point: watch for submitted deliverables, fetch what
 /// Agent B served, judge it against the commissioned brief, and sign the
@@ -75,10 +81,61 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
   );
 }
 
-function main() {
+/// Evaluate jobs submitted while this agent was not running. Selection lives in
+/// recover.ts; this supplies the chain reads and does the work.
+async function recoverPending(providerUrl: string): Promise<void> {
+  const { account } = agentC();
+
+  const nextJobId = (await publicClient.readContract({
+    address: addresses.JobContract,
+    abi: JobContractAbi,
+    functionName: "nextJobId",
+  })) as bigint;
+
+  const pending = await pendingJobIds({
+    nextJobId,
+    evaluator: account.address,
+    readJob: (jobId) =>
+      publicClient.readContract({
+        address: addresses.JobContract,
+        abi: JobContractAbi,
+        functionName: "getJob",
+        args: [jobId],
+      }),
+  });
+
+  if (pending.length === 0) return;
+  console.log(
+    `[agent-c] ${pending.length} job(s) awaiting evaluation from before startup: ${pending.join(", ")}`,
+  );
+
+  for (const jobId of pending) {
+    try {
+      await handleSubmission(jobId, providerUrl);
+    } catch (err) {
+      // Most likely the provider restarted too and no longer serves the
+      // deliverable — it keeps them in memory. Nothing can be evaluated without
+      // the content, so the job waits for the provider's timeout claim. Report
+      // it and carry on; one unrecoverable job must not stop the others.
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[agent-c] job ${jobId} could not be recovered: ${detail}`);
+    }
+  }
+}
+
+async function main() {
   const { account } = agentC();
   const providerUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
   console.log(`[agent-c] evaluator ${account.address}, provider at ${providerUrl}`);
+
+  // Before watching, catch up on anything missed while down.
+  try {
+    await recoverPending(providerUrl);
+  } catch (err) {
+    // A failed scan must not stop the evaluator starting — new jobs still work.
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error(`[agent-c] startup recovery scan failed: ${detail}`);
+  }
 
   const unwatch = watchEvents({
     address: addresses.JobContract,
@@ -111,4 +168,7 @@ function main() {
   process.on("SIGTERM", shutdown);
 }
 
-main();
+main().catch((err) => {
+  console.error("[agent-c] failed to start:", err instanceof Error ? err.message : err);
+  process.exit(1);
+});
