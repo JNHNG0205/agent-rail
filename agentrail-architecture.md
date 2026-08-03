@@ -44,7 +44,8 @@ agent-rail/
 │   │   │   │   ├── EvaluatorModule.ts
 │   │   │   │   ├── IdentityRegistry.ts
 │   │   │   │   └── ReputationRegistry.ts
-│   │   │   ├── addresses.ts              # Deployed addresses (written by deploy.ts)
+│   │   │   ├── deployments.ts            # Addresses per chain id (written by deploy.ts)
+│   │   │   ├── addresses.ts              # Resolves the active chain's addresses
 │   │   │   ├── types.ts                  # Job, Agent, JobState enums
 │   │   │   └── constants.ts              # Chain ID, decimals, timeout blocks
 │   │   └── index.ts
@@ -163,14 +164,23 @@ Rules:
 ## 4. Data Flow (runtime)
 
 ```
-1. Hardhat node runs at localhost:8545
-2. deploy.ts deploys contracts → writes addresses into shared/addresses.ts
-3. seed.ts registers Agent A + B, mints MockUSDC to both
-4. indexer subscribes to all contract events → upserts into Postgres
+1. chain: local Hardhat at :8545, or the deployed Base Sepolia contracts
+2. deploy.ts deploys as a fourth account (never an agent) → writes
+   shared/src/deployments.ts, keyed by chain id
+3. seed.ts registers agents A, B and C in IdentityRegistry, mints MockUSDC
+4. indexer subscribes to every contract event → upserts into Postgres
 5. web reads live chain state via viem AND indexed history via /api routes
-6. agent-b runs an HTTP server (402 response) + chain listener
-7. agent-a hires: HTTP → createJob → (B works, submits) → review → sign → settle
+6. agent-b runs an HTTP server (402 quote) + a JobFunded listener
+7. agent-c listens for DeliverableSubmitted, and on startup sweeps up jobs
+   submitted while it was down
+8. agent-a hires: 402 → brief → createJob → approve → fundJob
+9. agent-b designs the SVG, serves it, submits keccak256(svg) on chain
+10. agent-c fetches it, re-derives the hash, judges it, signs the decision
+11. EvaluatorModule recovers the signer and settles or refunds
 ```
+
+`CHAIN_ID` alone selects the chain — the endpoint, the keys, the deployed
+addresses and the chain the indexer follows all derive from it.
 
 ---
 
@@ -212,23 +222,44 @@ Postgres is a **read cache** — the chain is the source of truth. If DB and cha
 
 ---
 
-## 6. Environment Variables (.env.example)
+## 6. Environment Variables
+
+Four files, each read by exactly one consumer. Copies kept elsewhere are ignored,
+so a value edited in the wrong file appears to take effect and does not — set
+each where it is read.
+
+| File | Read by | Holds |
+|---|---|---|
+| `.env` | hardhat (deploy, seed, verify), `scripts/preflight.ts` | testnet RPC, Basescan key, the four testnet private keys |
+| `packages/agents/.env` | the three agents | `CHAIN_ID`, agent keys, evaluator address, agent-b server, LLM |
+| `packages/indexer/.env.local` | Ponder (**not** `.env`) | `CHAIN_ID`, `DATABASE_URL`, RPC |
+| `packages/web/.env` | Next.js | `NEXT_PUBLIC_*` only — inlined into the browser bundle, so public endpoints only |
 
 ```
-# chain
-RPC_URL=http://127.0.0.1:8545
-CHAIN_ID=31337
+# packages/agents/.env — the chain selects everything else
+CHAIN_ID=31337                      # or 84532 for Base Sepolia
 
-# agents (Hardhat default accounts — safe for local only)
-AGENT_A_PRIVATE_KEY=0xac09...
-AGENT_B_PRIVATE_KEY=0x59c6...
+# Hardhat accounts #1-#3. #0 is the deployer and is deliberately not an agent.
+AGENT_A_PRIVATE_KEY=0x59c6...
+AGENT_B_PRIVATE_KEY=0x5de4...
+AGENT_C_PRIVATE_KEY=0x7c85...
+EVALUATOR_ADDRESS=0x90F7...         # address only; A must never hold C's key
 
-# llm
-LLM_API_KEY=sk-...
-LLM_MODEL=claude-haiku-4-5
+# Testnet keys live under their own names, so the published Hardhat keys
+# cannot reach a public chain by forgetting to change a second variable.
+BASE_SEPOLIA_AGENT_A_PRIVATE_KEY=
+BASE_SEPOLIA_AGENT_B_PRIVATE_KEY=
+BASE_SEPOLIA_AGENT_C_PRIVATE_KEY=
+BASE_SEPOLIA_EVALUATOR_ADDRESS=
 
-# database
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/agentrail
+# llm — mock skips the network entirely, so a fresh clone runs with no setup.
+# openrouter needs a model listing structured-output support: both JSON calls
+# send a strict json_schema, and agent-c's verdict is signed and settled on
+# chain, so a malformed reply would strand the escrow.
+LLM_PROVIDER=mock                   # mock | openrouter
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=
+LLM_MODEL=
 
 # agent-b http server
 AGENT_B_PORT=4020
@@ -276,7 +307,10 @@ npm run web
 ## 9. What Deliberately Isn't Here
 
 - No ERC-4337 bundler / EntryPoint — direct contract calls (per proposal scope)
-- No real x402 negotiation — hardcoded 402 JSON response in agent-b/server.ts
-- No testnet deployment config — Hardhat local only (assignment requirement)
-- No CI/CD — out of scope for 2 weeks
+- No real x402 negotiation — a hardcoded 402 JSON response in agent-b/server.ts.
+  The status code is HTTP's, not the x402 protocol's: x402 settles a payment
+  inside the request/retry cycle via an `X-PAYMENT` header, EIP-3009 and a
+  facilitator. It has no notion of an evaluator, a dispute or a refund, so it
+  cannot express the escrowed, independently-graded flow this project is about.
+- No mainnet, and no CI/CD — out of scope for 2 weeks
 - No contract upgradeability — deploy-once for demo
