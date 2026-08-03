@@ -1,5 +1,5 @@
 import type { PosterBrief } from "@agentrail/shared";
-import { complete, stripFences } from "../lib/llm.js";
+import { completeValidated, stripFences } from "../lib/llm.js";
 
 const SYSTEM = `You are a graphic designer agent. You produce poster designs as SVG.
 
@@ -40,17 +40,20 @@ function mockPoster(brief: PosterBrief): string {
 
 /// Generate the poster Agent B was hired to produce.
 export async function runTask(brief: PosterBrief): Promise<string> {
-  const raw = await complete({
-    system: SYSTEM,
-    user: renderBrief(brief),
-    mock: mockPoster(brief),
-    maxTokens: 4000,
-  });
-
-  const svg = stripFences(raw);
-  if (!svg.startsWith("<svg") || !svg.endsWith("</svg>")) {
-    throw new Error(`provider returned non-SVG content: ${svg.slice(0, 80)}`);
-  }
+  // Retried rather than thrown on: this runs after the job is funded, so giving
+  // up on one bad generation strands real escrow until the timeout. Models do
+  // return a half-finished document and stop.
+  const svg = await completeValidated(
+    {
+      system: SYSTEM,
+      user: renderBrief(brief),
+      mock: mockPoster(brief),
+      maxTokens: 4000,
+    },
+    (value) => value.startsWith("<svg") && value.endsWith("</svg>"),
+    "the reply was not a complete SVG document (it must start with <svg and end with </svg>)",
+    stripFences,
+  );
   // TODO(M3): this only checks the outer tags, e.g. "<svg><script>...</script></svg>" would
   //           pass. The returned string is untrusted provider output — sanitise it before
   //           rendering as HTML in the web UI; do not trust it as safe markup as-is.
