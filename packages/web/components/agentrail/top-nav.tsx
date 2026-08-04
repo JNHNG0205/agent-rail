@@ -55,14 +55,12 @@ export function TopNav({
   connectedAddress,
   onConnectWallet,
   onDisconnectWallet,
-  onCreateJob,
 }: {
   activeTab: TabId
   onTabChange: (tab: TabId) => void
   connectedAddress: `0x${string}` | null
   onConnectWallet: () => void
   onDisconnectWallet: () => void
-  onCreateJob: () => void
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -199,15 +197,6 @@ export function TopNav({
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={onCreateJob}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Create Escrow Job</span>
-              <span className="sm:hidden">New Job</span>
-            </button>
           </div>
         </div>
 

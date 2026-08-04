@@ -4,8 +4,8 @@ import { Wallet, Activity, TrendingUp } from 'lucide-react'
 import { AgentCard } from '@/components/agentrail/agent-card'
 import { JobEscrowManager } from '@/components/agentrail/job-escrow-manager'
 import { EventFeed } from '@/components/agentrail/event-feed'
-import { AGENTS, METRICS, formatUsdc } from '@/lib/agentrail-data'
-import { useAgentData } from '@/hooks/useAgentData'
+import { formatUsdc } from '@/lib/agentrail-data'
+import { useRegistry } from '@/hooks/useRegistry'
 import { useJobs } from '@/hooks/useJobs'
 
 function Metric({
@@ -42,25 +42,8 @@ function Metric({
 }
 
 export function DashboardView() {
-  const { agents: liveAgents } = useAgentData()
+  const { agents } = useRegistry()
   const { jobs: liveJobs } = useJobs()
-
-  const displayAgents = liveAgents.map((a, idx) => ({
-    address: a.address,
-    label: `Agent ${idx === 0 ? "A" : idx === 1 ? "B" : "C"}`,
-    name: `Agent ${idx === 0 ? "A" : idx === 1 ? "B" : "C"}`,
-    role: (idx === 0 ? "Buyer" : idx === 1 ? "Provider" : "Evaluator") as "Buyer" | "Provider" | "Evaluator",
-    identityTokenId: a.tokenId ? Number(a.tokenId) : idx + 1,
-    tokenId: a.tokenId ? Number(a.tokenId) : idx + 1,
-    reputation: a.liveReputation !== undefined ? Number(a.liveReputation) : 0,
-    reputationJobs: 0,
-    completedJobs: 0,
-    ratingAverage: 0,
-    specialty: idx === 0 ? "Task Poster" : idx === 1 ? "Task Worker" : "Evaluator Module",
-    attestations: 0,
-    usdcBalance: a.usdcBalance !== undefined ? a.usdcBalance : 0n,
-  }))
-
   const totalEscrowUsdc = liveJobs.reduce((acc, j) => acc + BigInt(j.amount), 0n)
   const activeJobsCount = liveJobs.filter((j) => j.state === 0 || j.state === 1 || j.state === 2).length
 
@@ -82,15 +65,15 @@ export function DashboardView() {
           <Metric
             icon={<TrendingUp className="size-5" aria-hidden="true" />}
             label="Registered Agents"
-            value={String(displayAgents.length)}
+            value={String(agents.length)}
           />
         </div>
       </section>
 
       <section aria-label="Agent profiles">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {displayAgents.map((agent) => (
-            <AgentCard key={agent.identityTokenId} agent={agent} />
+          {agents.map((agent) => (
+            <AgentCard key={agent.address} agent={agent} />
           ))}
         </div>
       </section>

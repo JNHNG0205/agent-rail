@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { TopNav, type TabId } from './top-nav'
 import { ConnectWalletModal } from './connect-wallet-modal'
-import { CreateJobModal } from './create-job-modal'
 import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
@@ -15,7 +14,6 @@ export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>('assistant')
   const [connectedAddress, setConnectedAddress] = useState<`0x${string}` | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
 
   return (
     <div className="min-h-dvh bg-background">
@@ -25,7 +23,6 @@ export function AppShell() {
         connectedAddress={connectedAddress}
         onConnectWallet={() => setConnectOpen(true)}
         onDisconnectWallet={() => setConnectedAddress(null)}
-        onCreateJob={() => setCreateOpen(true)}
       />
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -52,7 +49,6 @@ export function AppShell() {
         onConnect={(addr) => setConnectedAddress(addr)}
       />
 
-      <CreateJobModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   )
 }

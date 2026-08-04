@@ -3,15 +3,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ArrowRight, Lock, Hash, Fingerprint, Layers3 } from 'lucide-react'
 import {
-  JOBS,
   JOB_STEPS,
-  type Job,
   type JobStep,
   formatUsdc,
   truncateHex,
 } from '@/lib/agentrail-data'
 import { useJobs } from '@/hooks/useJobs'
-import { JOB_STATE_LABELS } from '@agentrail/shared'
+import { JOB_STATE_LABELS, agentLabel } from '@agentrail/shared'
 import { ProgressTracker } from '@/components/agentrail/progress-tracker'
 import { CopyButton } from '@/components/agentrail/copy-button'
 import { cn } from '@/lib/utils'
@@ -39,7 +37,29 @@ function StatusBadge({ status }: { status: JobStep }) {
 
 const FILTERS: (JobStep | 'All')[] = ['All', ...JOB_STEPS]
 
-function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
+/// What this view shows for one job. Every field is derived from the indexed row
+/// — the labels come from agentLabel(), the blocks from the chain. Nothing here
+/// is invented for display.
+interface JobRow {
+  id: string
+  title: string
+  buyer: string
+  worker: string
+  client: `0x${string}`
+  provider: `0x${string}`
+  evaluator: `0x${string}`
+  amount: bigint
+  escrowAmount: bigint
+  status: JobStep
+  step: 1 | 2 | 3 | 4
+  currentStep: JobStep
+  deliverableHash: `0x${string}` | null
+  block: string
+  createdAt: string
+  updatedAt: string
+}
+
+function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -150,13 +170,14 @@ function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
                   Deliverable Hash (keccak256)
                 </p>
                 <code className="block truncate font-mono text-sm text-foreground">
-                  {truncateHex(job.deliverableHash, 12, 10)}
+                  {job.deliverableHash
+                    ? truncateHex(job.deliverableHash, 12, 10)
+                    : 'not submitted yet'}
                 </code>
               </div>
-              <CopyButton
-                value={job.deliverableHash}
-                label="Copy deliverable hash"
-              />
+              {job.deliverableHash && (
+                <CopyButton value={job.deliverableHash} label="Copy deliverable hash" />
+              )}
             </div>
 
             <div className="flex items-center gap-2.5 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
@@ -183,10 +204,10 @@ function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
 
 export function JobsView() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
-  const [selected, setSelected] = useState<Job | null>(null)
+  const [selected, setSelected] = useState<JobRow | null>(null)
   const { jobs: liveJobs } = useJobs()
 
-  const allJobsList: Job[] = liveJobs.length > 0
+  const allJobsList: JobRow[] = liveJobs.length > 0
     ? liveJobs.map((j) => {
         const stateLabel = JOB_STATE_LABELS[j.state] as JobStep
         return {
@@ -196,21 +217,20 @@ export function JobsView() {
           client: j.client,
           provider: j.provider,
           evaluator: j.evaluator,
-          buyer: `Agent A (${truncateHex(j.client, 6, 4)})`,
-          worker: `Agent B (${truncateHex(j.provider, 6, 4)})`,
+          buyer: agentLabel(j.client),
+          worker: agentLabel(j.provider),
           amount: j.amount,
           escrowAmount: j.amount,
           status: stateLabel,
           step: (j.state + 1) as 1 | 2 | 3 | 4,
           currentStep: stateLabel,
-          deliverableHash: j.deliverableHash ?? ("0x" + "0".repeat(64) as `0x${string}`),
-          signature: "0x",
+          deliverableHash: j.deliverableHash ?? null,
           block: String(j.createdBlock),
-          createdAt: "On-Chain",
-          updatedAt: "On-Chain",
+          createdAt: `block ${j.createdBlock}`,
+          updatedAt: `block ${j.updatedBlock ?? j.createdBlock}`,
         }
       })
-    : JOBS
+    : []
 
   const filtered = useMemo(
     () => (filter === 'All' ? allJobsList : allJobsList.filter((j) => j.status === filter)),

@@ -1,226 +1,150 @@
-'use client'
+"use client";
 
-import { useMemo, useState } from 'react'
-import {
-  Hash,
-  FileSignature,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldQuestion,
-  Cpu,
-} from 'lucide-react'
-import {
-  REGISTERED_AGENTS,
-  pseudoKeccak,
-  truncateHex,
-} from '@/lib/agentrail-data'
-import { CopyButton } from '@/components/agentrail/copy-button'
-import { cn } from '@/lib/utils'
+import { CheckCircle2, ShieldCheck, XCircle, Clock } from "lucide-react";
+import { agentLabel } from "@agentrail/shared";
+import { formatUsdc, truncateHex } from "@/lib/agentrail-data";
+import { useJobs } from "@/hooks/useJobs";
+import { CopyButton } from "@/components/agentrail/copy-button";
+import { cn } from "@/lib/utils";
 
-// r (32 bytes) + s (32 bytes) + v (1 byte) = 65 bytes = 130 hex chars
-const VALID_SIG =
-  '0x' + 'f3a9c2e8'.repeat(8) + 'b7d6a5f4'.repeat(8) + '1c'
+/// What the evaluator actually decided, per job. Member 4.
+///
+/// This used to be a signature-verification toy: it hashed some text with a
+/// stand-in function and compared a pasted signature against a constant, so it
+/// always agreed with itself and had no connection to any job. It demonstrated
+/// the idea and nothing about the system.
+///
+/// Now it reports real outcomes. Each row is a job the evaluator ruled on, and
+/// the ruling is why the money moved — approved releases escrow to the provider,
+/// rejected refunds the client. None of it is computed here: the decision was
+/// made off-chain, signed, verified on chain by EvaluatorModule, and recorded by
+/// the indexer.
 
-type RecoveryState = 'idle' | 'valid' | 'invalid'
+type Verdict = "approved" | "rejected" | "timeout" | "pending";
+
+function verdictOf(state: number, outcome: string | null): Verdict {
+  if (state !== 3) return "pending";
+  if (outcome === "completed") return "approved";
+  if (outcome === "timeoutClaimed") return "timeout";
+  return "rejected";
+}
+
+const VERDICT_META: Record<Verdict, { label: string; tone: string; icon: React.ReactNode }> = {
+  approved: {
+    label: "Approved — provider paid",
+    tone: "bg-success/15 text-success",
+    icon: <CheckCircle2 className="size-4" aria-hidden="true" />,
+  },
+  rejected: {
+    label: "Rejected — client refunded",
+    tone: "bg-destructive/15 text-destructive",
+    icon: <XCircle className="size-4" aria-hidden="true" />,
+  },
+  timeout: {
+    // The provider claimed after the deadline, so the evaluator never ruled.
+    label: "Timed out — provider claimed",
+    tone: "bg-warning/15 text-warning",
+    icon: <Clock className="size-4" aria-hidden="true" />,
+  },
+  pending: {
+    label: "Awaiting evaluation",
+    tone: "bg-muted text-muted-foreground",
+    icon: <Clock className="size-4" aria-hidden="true" />,
+  },
+};
 
 export function EvaluatorView() {
-  const [deliverable, setDeliverable] = useState(
-    'ipfs://bafybeigdyrztresult-payload-v3',
-  )
-  const [signature, setSignature] = useState('')
-  const [state, setState] = useState<RecoveryState>('idle')
-  const [recovered, setRecovered] = useState<string | null>(null)
+  const { jobs, loading } = useJobs();
 
-  const evaluator = REGISTERED_AGENTS.find((a) => a.role === 'Evaluator')
-  const deliverableHash = useMemo(
-    () => pseudoKeccak(deliverable || 'empty'),
-    [deliverable],
-  )
-
-  function isHexSig(v: string) {
-    return /^0x[0-9a-fA-F]{130}$/.test(v.trim())
-  }
-
-  function handleVerify() {
-    const sig = signature.trim()
-    if (!isHexSig(sig)) {
-      setState('invalid')
-      setRecovered(null)
-      return
-    }
-    if (sig.toLowerCase() === VALID_SIG.toLowerCase()) {
-      setState('valid')
-      setRecovered(evaluator?.address ?? null)
-    } else {
-      // deterministic pseudo-recovered address for any well-formed but unknown sig
-      setState('invalid')
-      setRecovered('0x' + pseudoKeccak(sig).slice(2, 42))
-    }
-  }
+  // Submitted or Terminal: everything the evaluator has ruled on, plus what is
+  // waiting on it.
+  const ruled = jobs.filter((j) => j.state === 3 || j.state === 2);
+  const approved = jobs.filter((j) => j.state === 3 && j.outcome === "completed").length;
+  const rejected = jobs.filter((j) => j.state === 3 && j.outcome === "cancelled").length;
+  const waiting = jobs.filter((j) => j.state === 2).length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          Evaluator Suite
-        </h1>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">Evaluator decisions</h2>
         <p className="text-sm text-muted-foreground">
-          ERC-7579 playground — hash deliverables and verify ECDSA approval
-          signatures via <span className="font-mono">ECDSA.recover</span>.
+          Every settlement is an off-chain judgement, signed by the evaluator and verified on
+          chain by EvaluatorModule before any money moves.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Hash panel */}
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">
-              <Hash className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                keccak256 Deliverable Hash
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Hash the raw deliverable payload.
-              </p>
-            </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          { label: "Approved", value: approved, tone: "text-success" },
+          { label: "Rejected", value: rejected, tone: "text-destructive" },
+          { label: "Awaiting decision", value: waiting, tone: "" },
+        ].map((m) => (
+          <div key={m.label} className="rounded-2xl border border-border bg-card p-5">
+            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">{m.label}</p>
+            <p className={cn("mt-1 text-2xl font-semibold tabular-nums", m.tone)}>{m.value}</p>
           </div>
-
-          <div className="space-y-1.5">
-            <label
-              htmlFor="deliverable"
-              className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-            >
-              Deliverable Payload
-            </label>
-            <textarea
-              id="deliverable"
-              rows={3}
-              value={deliverable}
-              onChange={(e) => setDeliverable(e.target.value)}
-              className="w-full resize-none rounded-lg border border-input bg-secondary/40 px-3 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          <div className="flex items-start gap-2 rounded-lg border border-border bg-background/50 p-3">
-            <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-foreground">
-              {deliverableHash}
-            </code>
-            <CopyButton value={deliverableHash} label="Copy hash" />
-          </div>
-        </section>
-
-        {/* Signature panel */}
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">
-              <FileSignature className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                ECDSA Signature Recovery
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Paste an approval signature to recover the signer.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="signature"
-                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-              >
-                Approval Signature (65 bytes)
-              </label>
-              <button
-                type="button"
-                onClick={() => setSignature(VALID_SIG)}
-                className="text-xs font-medium text-primary transition-colors hover:text-primary/80"
-              >
-                Use sample
-              </button>
-            </div>
-            <textarea
-              id="signature"
-              rows={3}
-              value={signature}
-              onChange={(e) => {
-                setSignature(e.target.value)
-                setState('idle')
-              }}
-              placeholder="0x…"
-              className="w-full resize-none rounded-lg border border-input bg-secondary/40 px-3 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleVerify}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-          >
-            <Cpu className="size-4" aria-hidden="true" />
-            Run ECDSA.recover
-          </button>
-
-          {/* Result */}
-          <div
-            className={cn(
-              'flex items-start gap-3 rounded-lg border p-3',
-              state === 'valid' &&
-                'border-success/30 bg-success/10 text-success',
-              state === 'invalid' &&
-                'border-destructive/30 bg-destructive/10 text-destructive',
-              state === 'idle' &&
-                'border-border bg-secondary/40 text-muted-foreground',
-            )}
-          >
-            {state === 'valid' ? (
-              <ShieldCheck className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-            ) : state === 'invalid' ? (
-              <ShieldAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-            ) : (
-              <ShieldQuestion
-                className="mt-0.5 size-5 shrink-0"
-                aria-hidden="true"
-              />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                {state === 'valid'
-                  ? 'Signature verified'
-                  : state === 'invalid'
-                    ? 'Verification failed'
-                    : 'Awaiting verification'}
-              </p>
-              {state === 'idle' ? (
-                <p className="text-xs text-muted-foreground">
-                  Signer will be recovered and matched against the registry.
-                </p>
-              ) : recovered ? (
-                <p className="mt-0.5 font-mono text-xs">
-                  Recovered signer: {truncateHex(recovered, 10, 8)}
-                  {state === 'valid' && evaluator ? (
-                    <span className="ml-1 font-sans text-success/80">
-                      ({evaluator.name})
-                    </span>
-                  ) : (
-                    <span className="ml-1 font-sans">
-                      (not an authorized evaluator)
-                    </span>
-                  )}
-                </p>
-              ) : (
-                <p className="text-xs">
-                  Malformed signature — expected a 65-byte hex string.
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
+        ))}
       </div>
+
+      {loading && ruled.length === 0 && (
+        <p className="text-sm text-muted-foreground">Loading decisions…</p>
+      )}
+
+      {!loading && ruled.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border p-10 text-center">
+          <p className="text-sm font-medium">Nothing evaluated yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Commission a job from the Assistant tab; its verdict will appear here.
+          </p>
+        </div>
+      )}
+
+      <ul className="space-y-3">
+        {ruled.map((job) => {
+          const verdict = verdictOf(job.state, job.outcome ?? null);
+          const meta = VERDICT_META[verdict];
+          return (
+            <li key={String(job.id)} className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
+                    <ShieldCheck className="size-4" aria-hidden="true" />
+                  </span>
+                  <div className="leading-tight">
+                    <p className="text-sm font-medium">Job #{String(job.id)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {agentLabel(job.provider)} · {formatUsdc(BigInt(job.amount))}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+                    meta.tone,
+                  )}
+                >
+                  {meta.icon}
+                  {meta.label}
+                </span>
+              </div>
+
+              {job.deliverableHash && (
+                <div className="mt-4 flex items-start gap-2 border-t border-border pt-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                      Deliverable hash — what the evaluator graded
+                    </p>
+                    <code className="mt-1 block truncate font-mono text-sm">
+                      {truncateHex(job.deliverableHash, 12, 10)}
+                    </code>
+                  </div>
+                  <CopyButton value={job.deliverableHash} label="Copy deliverable hash" />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
-  )
+  );
 }

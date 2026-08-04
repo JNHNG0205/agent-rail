@@ -7,7 +7,7 @@ import {
   Radio,
   Upload,
 } from 'lucide-react'
-import { EVENTS, type ActivityEvent, truncateHex } from '@/lib/agentrail-data'
+import { truncateHex } from '@/lib/agentrail-data'
 import { useLiveEvents } from '@/hooks/useLiveEvents'
 import { CopyButton } from './copy-button'
 import { cn } from '@/lib/utils'
@@ -50,19 +50,15 @@ export function EventFeed() {
   const { events: liveEvents } = useLiveEvents()
 
   // Use live on-chain events when available, otherwise show initial seed activity
-  const displayEvents: ActivityEvent[] = liveEvents.length > 0
-    ? liveEvents.map((evt) => ({
-        id: evt.id,
-        txHash: evt.txHash,
-        type: (evt.eventName ?? "JobCreated") as ActivityEvent["type"],
-        eventName: evt.eventName,
-        details: evt.details,
-        description: evt.details,
-        formattedAmount: evt.formattedAmount,
-        timestamp: evt.timestamp.toLocaleTimeString(),
-        timeAgo: "Just now",
-      }))
-    : EVENTS
+  // No fallback. An empty feed means nothing has happened yet, and saying so is
+  // more useful than showing sample events that never occurred.
+  const displayEvents = liveEvents.map((evt) => ({
+    id: evt.id,
+    txHash: evt.txHash,
+    eventName: evt.eventName ?? "Event",
+    description: evt.details,
+    timeAgo: evt.timestamp.toLocaleTimeString(),
+  }))
 
   return (
     <section
@@ -83,8 +79,13 @@ export function EventFeed() {
       </div>
 
       <ol className="mt-4 flex flex-col">
+        {displayEvents.length === 0 && (
+          <li className="py-6 text-center text-sm text-muted-foreground">
+            No events yet — commission a job to see them appear.
+          </li>
+        )}
         {displayEvents.map((event, index) => {
-          const meta = EVENT_META[event.eventName ?? event.type] ?? EVENT_META.JobCreated
+          const meta = EVENT_META[event.eventName] ?? EVENT_META.JobCreated
           const isLast = index === displayEvents.length - 1
 
           return (
@@ -110,7 +111,7 @@ export function EventFeed() {
               <div className={cn('min-w-0 flex-1', !isLast && 'pb-5')}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-foreground">
-                    {event.eventName ?? event.type}
+                    {event.eventName}
                   </p>
                   <span className="shrink-0 rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] text-muted-foreground">
                     {event.timeAgo}
