@@ -4,6 +4,8 @@ import {
   EvaluatorModuleAbi,
   IdentityRegistryAbi,
   ReputationRegistryAbi,
+  MockUSDCAbi,
+  ZERO_ADDRESS,
 } from "@agentrail/shared";
 import { publicClient } from "./viem";
 
@@ -28,11 +30,46 @@ export const reputationRegistry = {
   abi: ReputationRegistryAbi,
 } as const;
 
-/// Example read helper — extend with the calls the UI needs.
+export const mockUsdc = {
+  address: addresses.MockUSDC,
+  abi: MockUSDCAbi,
+} as const;
+
+/// Helper read functions targeting live chain via viem.
 export async function readReputation(agent: `0x${string}`): Promise<bigint> {
-  return publicClient.readContract({
-    ...reputationRegistry,
+  if (!addresses.ReputationRegistry || addresses.ReputationRegistry === ZERO_ADDRESS) {
+    return 0n;
+  }
+  const res = await publicClient.readContract({
+    address: addresses.ReputationRegistry,
+    abi: ReputationRegistryAbi,
     functionName: "getReputation",
     args: [agent],
-  });
+  } as never);
+  return BigInt(res as string | number | bigint);
+}
+
+export async function readJobOnChain(jobId: bigint) {
+  if (!addresses.JobContract || addresses.JobContract === ZERO_ADDRESS) {
+    return null;
+  }
+  return publicClient.readContract({
+    address: addresses.JobContract,
+    abi: JobContractAbi,
+    functionName: "getJob",
+    args: [jobId],
+  } as never);
+}
+
+export async function readUsdcBalance(account: `0x${string}`): Promise<bigint> {
+  if (!addresses.MockUSDC || addresses.MockUSDC === ZERO_ADDRESS) {
+    return 0n;
+  }
+  const res = await publicClient.readContract({
+    address: addresses.MockUSDC,
+    abi: MockUSDCAbi,
+    functionName: "balanceOf",
+    args: [account],
+  } as never);
+  return BigInt(res as string | number | bigint);
 }
