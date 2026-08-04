@@ -27,8 +27,8 @@ export interface Quote {
 /// Reads the same directory an outside caller would, so nothing here depends on
 /// being in-process — the selection would work identically over HTTP against a
 /// runtime someone else operates.
-export function findProviders(exclude: string): AgentRecord[] {
-  return listAgents()
+export async function findProviders(exclude: string): Promise<AgentRecord[]> {
+  return (await listAgents())
     .filter((a) => a.role === "provider" && a.service !== null && a.id !== exclude)
     .sort((a, b) => Number(a.service!.priceUsdc) - Number(b.service!.priceUsdc));
 }
@@ -51,13 +51,13 @@ export async function hire(opts: {
   evaluator: `0x${string}`;
   brief: PosterBrief;
 }): Promise<HireResult> {
-  const clientRecord = getAgent(opts.clientId);
+  const clientRecord = await getAgent(opts.clientId);
   if (!clientRecord) throw new Error(`no agent "${opts.clientId}"`);
   if (clientRecord.role !== "client") {
     throw new Error(`"${clientRecord.name}" is a provider and cannot hire`);
   }
 
-  const provider = getAgent(opts.providerId);
+  const provider = await getAgent(opts.providerId);
   if (!provider?.service) throw new Error(`no provider "${opts.providerId}"`);
 
   const amount = BigInt(Math.round(Number(provider.service.priceUsdc) * 1e6));

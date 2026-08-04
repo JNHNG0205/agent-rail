@@ -14,11 +14,13 @@
   "dependencies": {
     "@agentrail/shared": "*",
     "dotenv": "^16.4.0",
-    "viem": "^2.9.0"
+    "viem": "^2.9.0",
+    "pg": "^8.11.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "@types/pg": "^8.11.0"
   }
 }

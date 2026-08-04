@@ -1,16 +1,22 @@
 import "dotenv/config";
 import { startRuntime } from "./server.js";
 import { startProviderWorker } from "./worker.js";
-import { listAgents } from "./store.js";
+import { listAgents, importLegacyFile } from "./store.js";
 
 /// Agent runtime: hosts every agent a user creates, and works their jobs.
 ///
 /// Agent C is not hosted here. It is the fixed evaluator and runs separately —
 /// a referee that a party to the trade could create would be no referee at all.
 async function main() {
+  // Bring across anything the file-based store held. Those agents hold
+  // registered on-chain identities, and a soulbound token cannot be re-minted —
+  // dropping their keys would orphan them permanently.
+  const imported = await importLegacyFile();
+  if (imported > 0) console.log(`[runtime] imported ${imported} agent(s) from the legacy file`);
+
   const server = await startRuntime();
 
-  const existing = listAgents();
+  const existing = await listAgents();
   if (existing.length === 0) {
     console.log("[runtime] no agents yet — POST /agents to create one");
   } else {

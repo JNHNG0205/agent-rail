@@ -11,6 +11,7 @@ import {
 import { onboard, describe } from "../lib/onboard.js";
 import { hire, findProviders } from "./hire.js";
 import { chat, isChatHistory } from "./chat.js";
+import { isAuthorised, assertSafeToListen, host, secret } from "./auth.js";
 import { accountOf } from "./store.js";
 
 /// The agent runtime's HTTP surface.
@@ -125,11 +126,18 @@ export function startRuntime(): Promise<Server> {
       return;
     }
 
+    // Reads stay open — the directory and each quote exist to be discovered.
+    // Writes spend gas, USDC and model tokens, so they are gated.
+    if (method !== "GET" && !isAuthorised(req)) {
+      json(401, { error: "unauthorised" });
+      return;
+    }
+
     try {
       // GET /agents — the directory. This is discovery: an agent reads it to
       // find who sells what, rather than having a counterparty compiled in.
       if (method === "GET" && parts.length === 1 && parts[0] === "agents") {
-        json(200, listAgents().map(toPublic));
+        json(200, (await listAgents()).map(toPublic));
         return;
       }
 
@@ -175,7 +183,7 @@ export function startRuntime(): Promise<Server> {
 
       // POST /agents/:id/chat — talk to your agent until it has a brief.
       if (method === "POST" && parts.length === 3 && parts[0] === "agents" && parts[2] === "chat") {
-        const agent = getAgent(parts[1]!);
+        const agent = await getAgent(parts[1]!);
         if (!agent) {
           json(404, { error: `no agent "${parts[1]}"` });
           return;
@@ -191,7 +199,7 @@ export function startRuntime(): Promise<Server> {
 
         // The agent is told what is actually on offer, so it can only promise
         // work someone is selling.
-        const candidates = findProviders(agent.id);
+        const candidates = await findProviders(agent.id);
         const reply = await chat({
           agent,
           history,
@@ -204,7 +212,7 @@ export function startRuntime(): Promise<Server> {
 
       // POST /agents/:id/hire — this agent finds a provider and commissions it.
       if (method === "POST" && parts.length === 3 && parts[0] === "agents" && parts[2] === "hire") {
-        const client = getAgent(parts[1]!);
+        const client = await getAgent(parts[1]!);
         if (!client) {
           json(404, { error: `no agent "${parts[1]}"` });
           return;
@@ -218,7 +226,7 @@ export function startRuntime(): Promise<Server> {
 
         // Pick from the directory when the caller does not name one — the agent
         // choosing its own counterparty is the point.
-        const candidates = findProviders(client.id);
+        const candidates = await findProviders(client.id);
         const chosen =
           typeof b.providerId === "string"
             ? candidates.find((p) => p.id === b.providerId)
@@ -253,7 +261,7 @@ export function startRuntime(): Promise<Server> {
         json(404, { error: "not found" });
         return;
       }
-      const agent = getAgent(parts[1]!);
+      const agent = await getAgent(parts[1]!);
       if (!agent) {
         json(404, { error: `no agent "${parts[1]}"` });
         return;
@@ -327,9 +335,12 @@ export function startRuntime(): Promise<Server> {
     }
   });
 
+  assertSafeToListen();
+
   return new Promise((resolve) => {
-    server.listen(port, () => {
-      console.log(`[runtime] agent runtime on :${port}`);
+    server.listen(port, host(), () => {
+      const guard = secret() ? "secret required for writes" : "loopback only, no secret set";
+      console.log(`[runtime] agent runtime on ${host()}:${port} (${guard})`);
       resolve(server);
     });
   });

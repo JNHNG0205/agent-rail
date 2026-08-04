@@ -16,8 +16,8 @@ import { getCommission, rememberDeliverable } from "./server.js";
 export function startProviderWorker(): () => void {
   // Rebuilt per event rather than captured once, so an agent created after
   // startup is picked up without restarting the runtime.
-  const providerFor = (address: string): AgentRecord | undefined =>
-    listAgents().find(
+  const providerFor = async (address: string): Promise<AgentRecord | undefined> =>
+    (await listAgents()).find(
       (a) => a.role === "provider" && a.address.toLowerCase() === address.toLowerCase(),
     );
 
@@ -40,7 +40,7 @@ export function startProviderWorker(): () => void {
             args: [jobId],
           });
 
-          const agent = providerFor(job.provider);
+          const agent = await providerFor(job.provider);
           if (!agent) continue;
 
           const brief = getCommission(agent.id, jobId);

@@ -5,6 +5,11 @@
 /// need not be exposed on a public interface to be usable.
 const RUNTIME_URL = process.env.AGENT_RUNTIME_URL ?? "http://127.0.0.1:4030";
 
+/// Shared secret for the runtime's write endpoints. Server-side only — it is
+/// read here, never sent to the browser, which is the reason these routes proxy
+/// rather than letting the page call the runtime directly.
+const RUNTIME_SECRET = process.env.AGENT_RUNTIME_SECRET;
+
 export interface ProxyResult {
   status: number;
   body: unknown;
@@ -19,9 +24,13 @@ export async function proxy(
   init?: { method?: string; body?: unknown },
 ): Promise<ProxyResult> {
   try {
+    const headers: Record<string, string> = {};
+    if (init?.body) headers["content-type"] = "application/json";
+    if (RUNTIME_SECRET) headers.authorization = `Bearer ${RUNTIME_SECRET}`;
+
     const res = await fetch(`${RUNTIME_URL}${path}`, {
       method: init?.method ?? "GET",
-      headers: init?.body ? { "content-type": "application/json" } : undefined,
+      headers,
       body: init?.body ? JSON.stringify(init.body) : undefined,
       cache: "no-store",
     });
