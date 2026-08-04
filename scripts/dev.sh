@@ -25,10 +25,15 @@ case "$TARGET" in
     ;;
   base-sepolia)
     export CHAIN_ID=84532
-    # Every package resolves its endpoint by chain, but only the root .env
-    # carries the private one. Lift it into the environment so the agents, the
-    # indexer and the web app share it, instead of each independently falling
-    # back to the public pool — which rate-limits the indexer's backfill.
+    # The agents need the private endpoint: they send transactions, and a
+    # load-balanced pool answers nonce reads from nodes that have not applied the
+    # previous block. Only the root .env carries it, so lift it into the
+    # environment for them.
+    #
+    # The indexer deliberately does not use it — see ponder.config.ts. Its
+    # workload is bulk eth_getLogs, and the free tier caps that at a 10 block
+    # range where the public endpoint serves 1000. It reads
+    # BASE_SEPOLIA_INDEXER_RPC_URL instead, so exporting this does not reach it.
     if [ -z "${BASE_SEPOLIA_RPC_URL:-}" ] && [ -f .env ]; then
       BASE_SEPOLIA_RPC_URL="$(grep -E '^BASE_SEPOLIA_RPC_URL=.' .env | head -1 | cut -d= -f2- || true)"
     fi

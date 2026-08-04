@@ -31,7 +31,20 @@ const CANDIDATES = [
   {
     name: "baseSepolia",
     id: BASE_SEPOLIA_CHAIN_ID,
-    rpc: process.env.BASE_SEPOLIA_RPC_URL ?? BASE_SEPOLIA_RPC_URL,
+    // Deliberately NOT BASE_SEPOLIA_RPC_URL, which the agents use.
+    //
+    // The indexer's workload is the opposite of theirs. Agents send a handful of
+    // transactions and need a node that answers consistently, so a private
+    // endpoint is right for them. The indexer reads logs in bulk, and there the
+    // limit that matters is the eth_getLogs block range: Alchemy's free tier
+    // caps it at 10 blocks, while the public endpoint serves 1000. Over a
+    // 200k-block history that is 20,000 requests against 200 — and the 20,000
+    // exceed the free tier's compute units per second, so the backfill stalls
+    // part-way with 429s and never finishes.
+    //
+    // Set BASE_SEPOLIA_INDEXER_RPC_URL to override, which is worth doing on a
+    // paid plan where the range cap is lifted.
+    rpc: process.env.BASE_SEPOLIA_INDEXER_RPC_URL ?? BASE_SEPOLIA_RPC_URL,
     disableCache: false,
   },
 ] as const;
