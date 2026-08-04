@@ -10,6 +10,7 @@ import {
 } from "./store.js";
 import { onboard, describe } from "../lib/onboard.js";
 import { hire, findProviders } from "./hire.js";
+import { chat, isChatHistory } from "./chat.js";
 import { accountOf } from "./store.js";
 
 /// The agent runtime's HTTP surface.
@@ -169,6 +170,35 @@ export function startRuntime(): Promise<Server> {
         console.log(`[runtime] created ${record.role} "${record.name}" (${record.id})`);
         console.log(`[runtime]   ${await describe(account)}`);
         json(201, toPublic(record));
+        return;
+      }
+
+      // POST /agents/:id/chat — talk to your agent until it has a brief.
+      if (method === "POST" && parts.length === 3 && parts[0] === "agents" && parts[2] === "chat") {
+        const agent = getAgent(parts[1]!);
+        if (!agent) {
+          json(404, { error: `no agent "${parts[1]}"` });
+          return;
+        }
+        const body: unknown = JSON.parse(await readBody(req));
+        const history = (body as { messages?: unknown }).messages;
+        if (!isChatHistory(history)) {
+          json(400, {
+            error: "messages must be a non-empty array of {role, content}, at most 40",
+          });
+          return;
+        }
+
+        // The agent is told what is actually on offer, so it can only promise
+        // work someone is selling.
+        const candidates = findProviders(agent.id);
+        const reply = await chat({
+          agent,
+          history,
+          offers: candidates.map((p) => p.service!),
+          requirements: candidates[0]?.service?.requirements ?? [],
+        });
+        json(200, reply);
         return;
       }
 
