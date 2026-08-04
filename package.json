@@ -26,6 +26,8 @@
     "agent:b": "npm -w packages/agents run start:b",
     "agent:b:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:b",
     "agent:c": "npm -w packages/agents run start:c",
+    "runtime": "npm -w packages/agents run start:runtime",
+    "runtime:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:runtime",
     "agent:c:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:c",
     "test": "npm test --workspaces --if-present",
     "coverage": "npm -w packages/contracts run coverage",

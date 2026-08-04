@@ -43,3 +43,4 @@ npm-debug.log*
 # ponder build output
 .ponder/
 packages/indexer/generated/
+.agents.json

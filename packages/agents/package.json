@@ -8,7 +8,8 @@
     "start:b": "tsx src/agent-b/index.ts",
     "start:c": "tsx src/agent-c/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test \"src/**/*.test.ts\""
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "start:runtime": "tsx src/runtime/index.ts"
   },
   "dependencies": {
     "@agentrail/shared": "*",
