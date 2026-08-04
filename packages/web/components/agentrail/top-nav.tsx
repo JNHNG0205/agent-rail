@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
+  Bot,
   LayoutDashboard,
   Users,
   Briefcase,
@@ -18,9 +19,14 @@ import {
 import { truncateHex } from '@/lib/agentrail-data'
 import { cn } from '@/lib/utils'
 
-export type TabId = 'dashboard' | 'registry' | 'jobs' | 'evaluator'
+export type TabId = 'assistant' | 'dashboard' | 'registry' | 'jobs' | 'evaluator'
 
 export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  {
+    id: 'assistant',
+    label: 'Assistant',
+    icon: <Bot className="size-4" />,
+  },
   {
     id: 'dashboard',
     label: 'Dashboard',

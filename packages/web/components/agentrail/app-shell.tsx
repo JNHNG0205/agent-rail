@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { TopNav, type TabId } from './top-nav'
 import { ConnectWalletModal } from './connect-wallet-modal'
 import { CreateJobModal } from './create-job-modal'
+import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
 import { JobsView } from './views/jobs-view'
@@ -11,7 +12,7 @@ import { EvaluatorView } from './views/evaluator-view'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard')
+  const [activeTab, setActiveTab] = useState<TabId>('assistant')
   const [connectedAddress, setConnectedAddress] = useState<`0x${string}` | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -28,6 +29,9 @@ export function AppShell() {
       />
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className={cn(activeTab === 'assistant' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+          <AssistantView />
+        </div>
         <div className={cn(activeTab === 'dashboard' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
           <DashboardView />
         </div>

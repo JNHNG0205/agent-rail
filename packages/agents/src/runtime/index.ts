@@ -1,7 +1,31 @@
 import "dotenv/config";
 import { startRuntime } from "./server.js";
 import { startProviderWorker } from "./worker.js";
-import { listAgents, importLegacyFile } from "./store.js";
+import { listAgents, importLegacyFile, createAgent, accountOf } from "./store.js";
+import { onboard, describe } from "../lib/onboard.js";
+
+/// Every user talks to a client agent, and nobody should have to create one
+/// before they can say anything. So the runtime provisions it at startup rather
+/// than lazily: funding and registering takes about ten seconds on a public
+/// chain, and doing it on the first message would hang that message.
+///
+/// One shared assistant, because the runtime has no notion of a user. Per-user
+/// assistants need an ownership model, which is deliberately not built.
+const DEFAULT_CLIENT_NAME = "Your Assistant";
+
+async function ensureDefaultClient(): Promise<void> {
+  const existing = await listAgents();
+  if (existing.some((a) => a.role === "client")) return;
+
+  console.log(`[runtime] no client agent yet — creating "${DEFAULT_CLIENT_NAME}"…`);
+  const record = await createAgent({ name: DEFAULT_CLIENT_NAME, role: "client" });
+  const account = await accountOf(record);
+  await onboard(account, {
+    treasuryKey: process.env.BASE_SEPOLIA_TREASURY_PRIVATE_KEY as `0x${string}` | undefined,
+    grantUsdc: true,
+  });
+  console.log(`[runtime]   ${await describe(account)}`);
+}
 
 /// Agent runtime: hosts every agent a user creates, and works their jobs.
 ///
@@ -13,6 +37,8 @@ async function main() {
   // dropping their keys would orphan them permanently.
   const imported = await importLegacyFile();
   if (imported > 0) console.log(`[runtime] imported ${imported} agent(s) from the legacy file`);
+
+  await ensureDefaultClient();
 
   const server = await startRuntime();
 

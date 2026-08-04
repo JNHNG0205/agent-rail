@@ -10,7 +10,7 @@ import {
 } from '@/lib/agentrail-data'
 import { useAgentData } from '@/hooks/useAgentData'
 import { CopyButton } from '@/components/agentrail/copy-button'
-import { CreateAgentModal } from '@/components/CreateAgentModal'
+import { CreateProviderModal } from '@/components/agentrail/create-provider-modal'
 import { cn } from '@/lib/utils'
 
 const ROLE_TONE: Record<RegisteredAgent['role'], string> = {
@@ -159,10 +159,10 @@ export function RegistryView() {
         ))}
       </div>
 
-      <CreateAgentModal
+      <CreateProviderModal
         open={createAgentOpen}
         onClose={() => setCreateAgentOpen(false)}
-        onAgentCreated={() => {
+        onCreated={() => {
           if (refetch) refetch()
         }}
       />

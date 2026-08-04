@@ -12,6 +12,7 @@ import { onboard, describe } from "../lib/onboard.js";
 import { hire, findProviders } from "./hire.js";
 import { chat, isChatHistory } from "./chat.js";
 import { isAuthorised, assertSafeToListen, host, secret } from "./auth.js";
+import { proposeOffer } from "./offer.js";
 import { accountOf } from "./store.js";
 
 /// The agent runtime's HTTP surface.
@@ -138,6 +139,25 @@ export function startRuntime(): Promise<Server> {
       // find who sells what, rather than having a counterparty compiled in.
       if (method === "GET" && parts.length === 1 && parts[0] === "agents") {
         json(200, (await listAgents()).map(toPublic));
+        return;
+      }
+
+      // POST /agents/preview — propose a service from a plain-language purpose,
+      // without creating anything. Separate from creation so a person sees the
+      // terms their agent will be held to before committing an identity to the
+      // chain, which cannot be undone.
+      if (method === "POST" && parts.length === 2 && parts[0] === "agents" && parts[1] === "preview") {
+        const body: unknown = JSON.parse(await readBody(req));
+        const b = body as { name?: unknown; purpose?: unknown };
+        if (typeof b.name !== "string" || b.name.trim().length === 0) {
+          json(400, { error: "name is required" });
+          return;
+        }
+        if (typeof b.purpose !== "string" || b.purpose.trim().length < 8) {
+          json(400, { error: "purpose must describe what the agent does" });
+          return;
+        }
+        json(200, await proposeOffer(b.name.trim(), b.purpose.trim()));
         return;
       }
 
