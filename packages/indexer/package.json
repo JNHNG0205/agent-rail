@@ -1,0 +1,24 @@
+{
+  "name": "@agentrail/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev --schema public",
+    "start": "ponder start --schema public",
+    "codegen": "ponder codegen",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentrail/shared": "*",
+    "dotenv": "^16.4.0",
+    "hono": "^4.12.32",
+    "ponder": "^0.17.3",
+    "viem": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

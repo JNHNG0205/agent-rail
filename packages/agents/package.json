@@ -1,0 +1,23 @@
+{
+  "name": "@agentrail/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:a": "tsx src/agent-a/index.ts",
+    "start:b": "tsx src/agent-b/index.ts",
+    "start:c": "tsx src/agent-c/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agentrail/shared": "*",
+    "dotenv": "^16.4.0",
+    "viem": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

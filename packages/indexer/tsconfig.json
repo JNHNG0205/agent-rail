@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "// include": "ponder.config.ts, ponder.schema.ts and ponder-env.d.ts sit at the package root, and ponder-env.d.ts is what declares the ponder:* virtual modules. Restricting this to src/ leaves every indexing function untyped.",
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules", ".ponder"]
+}

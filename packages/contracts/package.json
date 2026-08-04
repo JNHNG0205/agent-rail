@@ -1,0 +1,33 @@
+{
+  "name": "@agentrail/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile && node scripts/generate-abis.mjs",
+    "node": "hardhat node",
+    "deploy": "hardhat run scripts/deploy.ts --network localhost",
+    "deploy:base-sepolia": "hardhat run scripts/deploy.ts --network baseSepolia",
+    "seed": "hardhat run scripts/seed.ts --network localhost",
+    "seed:base-sepolia": "hardhat run scripts/seed.ts --network baseSepolia",
+    "e2e": "hardhat run scripts/e2e.ts --network localhost",
+    "verify:base-sepolia": "hardhat run scripts/verify.ts --network baseSepolia",
+    "test": "hardhat test",
+    "coverage": "SOLIDITY_COVERAGE=true hardhat coverage",
+    "abis": "node scripts/generate-abis.mjs"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0",
+    "viem": "^2.18.0"
+  },
+  "dependencies": {
+    "@agentrail/shared": "*",
+    "@openzeppelin/contracts": "^5.0.2"
+  }
+}
