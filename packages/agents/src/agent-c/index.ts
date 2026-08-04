@@ -10,6 +10,12 @@ import { watchEvents } from "../lib/watch.js";
 import { review } from "./review.js";
 import { approve } from "./approve.js";
 import { pendingJobIds } from "./recover.js";
+import { locateProvider } from "./locate.js";
+
+interface Endpoints {
+  runtimeUrl: string;
+  fallbackUrl: string;
+}
 
 /// Agent C (evaluator) entry point: watch for submitted deliverables, fetch what
 /// Agent B served, judge it against the commissioned brief, and sign the
@@ -29,7 +35,7 @@ function isPosterBrief(value: unknown): value is PosterBrief {
   );
 }
 
-async function handleSubmission(jobId: bigint, providerUrl: string): Promise<void> {
+async function handleSubmission(jobId: bigint, endpoints: Endpoints): Promise<void> {
   const job = await publicClient.readContract({
     address: addresses.JobContract,
     abi: JobContractAbi,
@@ -46,7 +52,11 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
     `[agent-c] job ${jobId} submitted by ${agentLabel(job.provider)} — evaluating`,
   );
 
-  const briefRes = await fetch(`${providerUrl}/commission/${jobId}`);
+  // Resolve where this provider serves. Which agent produced the work is only
+  // known now, from job.provider — it cannot be configured ahead of time.
+  const provider = await locateProvider(job.provider, endpoints);
+
+  const briefRes = await fetch(`${provider.base}/commission/${jobId}`);
   if (!briefRes.ok) {
     console.error(`[agent-c] job ${jobId}: cannot fetch brief (HTTP ${briefRes.status})`);
     return;
@@ -57,7 +67,7 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
     return;
   }
 
-  const svgRes = await fetch(`${providerUrl}/deliverable/${jobId}`);
+  const svgRes = await fetch(`${provider.base}/deliverable/${jobId}`);
   if (!svgRes.ok) {
     console.error(`[agent-c] job ${jobId}: cannot fetch deliverable (HTTP ${svgRes.status})`);
     return;
@@ -83,7 +93,7 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
 
 /// Evaluate jobs submitted while this agent was not running. Selection lives in
 /// recover.ts; this supplies the chain reads and does the work.
-async function recoverPending(providerUrl: string): Promise<void> {
+async function recoverPending(endpoints: Endpoints): Promise<void> {
   const evaluator = await agentC();
 
   const nextJobId = (await publicClient.readContract({
@@ -111,7 +121,7 @@ async function recoverPending(providerUrl: string): Promise<void> {
 
   for (const jobId of pending) {
     try {
-      await handleSubmission(jobId, providerUrl);
+      await handleSubmission(jobId, endpoints);
     } catch (err) {
       // Most likely the provider restarted too and no longer serves the
       // deliverable — it keeps them in memory. Nothing can be evaluated without
@@ -125,12 +135,17 @@ async function recoverPending(providerUrl: string): Promise<void> {
 
 async function main() {
   const evaluator = await agentC();
-  const providerUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
-  console.log(`[agent-c] evaluator ${evaluator.address}, provider at ${providerUrl}`);
+  const endpoints: Endpoints = {
+    runtimeUrl: process.env.AGENT_RUNTIME_URL ?? "http://127.0.0.1:4030",
+    fallbackUrl: process.env.AGENT_B_URL ?? "http://127.0.0.1:4020",
+  };
+  console.log(
+    `[agent-c] evaluator ${evaluator.address}, runtime at ${endpoints.runtimeUrl}`,
+  );
 
   // Before watching, catch up on anything missed while down.
   try {
-    await recoverPending(providerUrl);
+    await recoverPending(endpoints);
   } catch (err) {
     // A failed scan must not stop the evaluator starting — new jobs still work.
     const detail = err instanceof Error ? err.message : String(err);
@@ -147,7 +162,7 @@ async function main() {
         const jobId = log.args.jobId;
         if (jobId === undefined) continue;
         try {
-          await handleSubmission(jobId, providerUrl);
+          await handleSubmission(jobId, endpoints);
         } catch (err) {
           // Leaving a job Submitted is recoverable: the provider can claim on
           // timeout. Never crash the evaluator over a single job.

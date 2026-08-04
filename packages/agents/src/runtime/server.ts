@@ -9,6 +9,7 @@ import {
   type ServiceOffer,
 } from "./store.js";
 import { onboard, describe } from "../lib/onboard.js";
+import { hire, findProviders } from "./hire.js";
 import { accountOf } from "./store.js";
 
 /// The agent runtime's HTTP surface.
@@ -168,6 +169,52 @@ export function startRuntime(): Promise<Server> {
         console.log(`[runtime] created ${record.role} "${record.name}" (${record.id})`);
         console.log(`[runtime]   ${await describe(account)}`);
         json(201, toPublic(record));
+        return;
+      }
+
+      // POST /agents/:id/hire — this agent finds a provider and commissions it.
+      if (method === "POST" && parts.length === 3 && parts[0] === "agents" && parts[2] === "hire") {
+        const client = getAgent(parts[1]!);
+        if (!client) {
+          json(404, { error: `no agent "${parts[1]}"` });
+          return;
+        }
+        const body: unknown = JSON.parse(await readBody(req));
+        const b = body as { brief?: unknown; providerId?: unknown };
+        if (!isPosterBrief(b.brief)) {
+          json(400, { error: "brief is malformed" });
+          return;
+        }
+
+        // Pick from the directory when the caller does not name one — the agent
+        // choosing its own counterparty is the point.
+        const candidates = findProviders(client.id);
+        const chosen =
+          typeof b.providerId === "string"
+            ? candidates.find((p) => p.id === b.providerId)
+            : candidates[0];
+        if (!chosen) {
+          json(400, { error: "no provider is offering a service" });
+          return;
+        }
+
+        const evaluator = process.env.BASE_SEPOLIA_EVALUATOR_ADDRESS ?? process.env.EVALUATOR_ADDRESS;
+        if (!evaluator) {
+          json(500, { error: "no evaluator address configured" });
+          return;
+        }
+
+        const result = await hire({
+          clientId: client.id,
+          providerId: chosen.id,
+          evaluator: evaluator as `0x${string}`,
+          brief: b.brief,
+        });
+        json(200, {
+          jobId: result.jobId.toString(),
+          provider: toPublic(result.provider),
+          amount: result.amount.toString(),
+        });
         return;
       }
 
