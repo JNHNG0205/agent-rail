@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { proxy } from "@/lib/runtime";
 
-/// POST /api/agents/:id/hire — this agent finds a provider and commissions it.
+/// POST /api/runtime/agents/:id/hire — this agent finds a provider and commissions it.
 /// Member 4.
 ///
 /// Returns once the escrow is funded, not once the work is done. The provider

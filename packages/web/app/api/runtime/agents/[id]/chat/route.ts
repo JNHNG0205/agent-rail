@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { proxy } from "@/lib/runtime";
 
-/// POST /api/agents/:id/chat — talk to one of your agents. Member 4.
+/// POST /api/runtime/agents/:id/chat — talk to one of your agents. Member 4.
 ///
 /// The conversation is stateless: the whole history goes with each turn, so the
 /// browser owns it and a runtime restart loses nothing.
