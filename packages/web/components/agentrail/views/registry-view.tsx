@@ -1,6 +1,7 @@
 "use client";
 
-import { Bot, BadgeCheck, Star, ShieldCheck, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { Bot, BadgeCheck, Star, ShieldCheck, Wallet, Plus } from 'lucide-react'
 import {
   REGISTERED_AGENTS,
   type RegisteredAgent,
@@ -9,6 +10,7 @@ import {
 } from '@/lib/agentrail-data'
 import { useAgentData } from '@/hooks/useAgentData'
 import { CopyButton } from '@/components/agentrail/copy-button'
+import { CreateAgentModal } from '@/components/CreateAgentModal'
 import { cn } from '@/lib/utils'
 
 const ROLE_TONE: Record<RegisteredAgent['role'], string> = {
@@ -108,7 +110,8 @@ function AgentRegistryCard({ agent }: { agent: RegisteredAgent }) {
 }
 
 export function RegistryView() {
-  const { agents: liveAgents } = useAgentData()
+  const { agents: liveAgents, refetch } = useAgentData()
+  const [createAgentOpen, setCreateAgentOpen] = useState(false)
 
   const displayAgents: RegisteredAgent[] = liveAgents.length > 0
     ? liveAgents.map((a, idx) => ({
@@ -133,12 +136,21 @@ export function RegistryView() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Identity & Reputation Registry
+            Identity &amp; Reputation Registry
           </h2>
           <p className="text-sm text-muted-foreground">
             On-chain registered AI agents under ERC-8004 standard
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setCreateAgentOpen(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Mint New Agent NFT
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -146,6 +158,14 @@ export function RegistryView() {
           <AgentRegistryCard key={agent.address} agent={agent} />
         ))}
       </div>
+
+      <CreateAgentModal
+        open={createAgentOpen}
+        onClose={() => setCreateAgentOpen(false)}
+        onAgentCreated={() => {
+          if (refetch) refetch()
+        }}
+      />
     </div>
   )
 }
