@@ -61,7 +61,15 @@ async function smartAccountFor(privateKey: Hex): Promise<AgentAccount> {
     owner: owner.address,
     async send(calls) {
       const hash = await bundler.sendUserOperation({ calls });
-      const receipt = await bundler.waitForUserOperationReceipt({ hash });
+      // A generous timeout, because a bundler is a queue and not a chain. viem's
+      // default gave up while operations were still pending on Base Sepolia, and
+      // the caller then treated a slow success as a failure — two agents were
+      // reported as failing to register, and both turned out to be registered.
+      const receipt = await bundler.waitForUserOperationReceipt({
+        hash,
+        timeout: 120_000,
+        pollingInterval: 2_000,
+      });
       if (!receipt.success) {
         throw new Error(`user operation reverted (tx ${receipt.receipt.transactionHash})`);
       }

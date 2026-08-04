@@ -45,6 +45,24 @@ async function fundGas(treasuryKey: Hex, to: `0x${string}`): Promise<void> {
   const hash = await wallet.sendTransaction({ to, value: TOP_UP });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`funding ${to} reverted (tx ${hash})`);
+
+  await waitForBalance(to);
+}
+
+/// Wait until the funding is visible, not merely mined.
+///
+/// A receipt proves the transfer happened; it does not promise the next request
+/// will see it. The endpoint is a pool, and the bundler's precheck reads the
+/// balance separately — so the very next user operation can be rejected with
+/// "sender balance and deposit together is 0" for an account that has just been
+/// funded. Observed exactly that: the account held 0.004 ETH while the bundler
+/// insisted it held nothing.
+async function waitForBalance(address: `0x${string}`): Promise<void> {
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    if ((await publicClient.getBalance({ address })) >= MIN_GAS) return;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`funded ${address} but the balance never became visible`);
 }
 
 export interface OnboardOptions {
