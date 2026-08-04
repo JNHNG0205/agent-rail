@@ -10,6 +10,7 @@ import {
 } from "@agentrail/shared";
 import { publicClient, agentA } from "../lib/wallet.js";
 import { composeBrief } from "./llm.js";
+import { waitForAllowance, fundWithRetry } from "./fund.js";
 
 export interface QuoteResponse {
   price: string; // USDC minor units, as string
@@ -123,15 +124,45 @@ export async function hire(agentBUrl: string, goal: string): Promise<HireResult>
     functionName: "approve",
     args: [addresses.JobContract, amount],
   });
-  await publicClient.waitForTransactionReceipt({ hash: approveHash });
+  const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
+  if (approveReceipt.status !== "success") {
+    throw new Error(`approve reverted (tx ${approveHash}) — job ${jobId} left unfunded`);
+  }
 
-  const fundHash = await wallet.writeContract({
-    address: addresses.JobContract,
-    abi: JobContractAbi,
-    functionName: "fundJob",
-    args: [jobId],
+  // Both retry, because a receipt does not guarantee the next request sees the
+  // state it wrote — see fund.ts.
+  await waitForAllowance({
+    amount,
+    readAllowance: () =>
+      publicClient.readContract({
+        address: addresses.MockUSDC,
+        abi: MockUSDCAbi,
+        functionName: "allowance",
+        args: [account.address, addresses.JobContract],
+      }) as Promise<bigint>,
   });
-  await publicClient.waitForTransactionReceipt({ hash: fundHash });
+
+  await fundWithRetry({
+    readState: async () =>
+      (
+        await publicClient.readContract({
+          address: addresses.JobContract,
+          abi: JobContractAbi,
+          functionName: "getJob",
+          args: [jobId],
+        })
+      ).state,
+    send: async () => {
+      const hash = await wallet.writeContract({
+        address: addresses.JobContract,
+        abi: JobContractAbi,
+        functionName: "fundJob",
+        args: [jobId],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      return { status: receipt.status, hash };
+    },
+  });
   console.log(`[agent-a] job ${jobId} funded with ${formatUsdc(amount)} USDC — escrow held`);
 
   return { jobId, brief, quote };
