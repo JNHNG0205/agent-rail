@@ -1,4 +1,4 @@
-import { keccak256, encodePacked } from "viem";
+import { keccak256, encodePacked, type Abi } from "viem";
 import { addresses, EvaluatorModuleAbi } from "@agentrail/shared";
 import { publicClient, agentC } from "../lib/wallet.js";
 
@@ -31,19 +31,18 @@ export async function approve(
   deliverableHash: `0x${string}`,
   approved: boolean,
 ): Promise<`0x${string}`> {
-  const { wallet } = agentC();
+  const evaluator = await agentC();
 
-  const signature = await wallet.signMessage({
-    message: { raw: approvalDigest(jobId, deliverableHash, approved) },
-  });
+  const signature = await evaluator.signDigest(
+    approvalDigest(jobId, deliverableHash, approved),
+  );
 
-  const hash = await wallet.writeContract({
-    address: addresses.EvaluatorModule,
-    abi: EvaluatorModuleAbi,
-    functionName: "submitApproval",
-    args: [jobId, deliverableHash, approved, signature],
-  });
-  await publicClient.waitForTransactionReceipt({ hash });
-
-  return hash;
+  return evaluator.send([
+    {
+      to: addresses.EvaluatorModule,
+      abi: EvaluatorModuleAbi as Abi,
+      functionName: "submitApproval",
+      args: [jobId, deliverableHash, approved, signature],
+    },
+  ]);
 }

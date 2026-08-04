@@ -37,10 +37,10 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
     args: [jobId],
   });
 
-  const { account } = agentC();
+  const evaluator = await agentC();
   // Only act on jobs where this agent is the assigned evaluator — submitApproval
   // would revert anyway, but there is no reason to spend a token evaluating.
-  if (job.evaluator.toLowerCase() !== account.address.toLowerCase()) return;
+  if (job.evaluator.toLowerCase() !== evaluator.address.toLowerCase()) return;
 
   console.log(
     `[agent-c] job ${jobId} submitted by ${agentLabel(job.provider)} — evaluating`,
@@ -84,7 +84,7 @@ async function handleSubmission(jobId: bigint, providerUrl: string): Promise<voi
 /// Evaluate jobs submitted while this agent was not running. Selection lives in
 /// recover.ts; this supplies the chain reads and does the work.
 async function recoverPending(providerUrl: string): Promise<void> {
-  const { account } = agentC();
+  const evaluator = await agentC();
 
   const nextJobId = (await publicClient.readContract({
     address: addresses.JobContract,
@@ -94,7 +94,7 @@ async function recoverPending(providerUrl: string): Promise<void> {
 
   const pending = await pendingJobIds({
     nextJobId,
-    evaluator: account.address,
+    evaluator: evaluator.address,
     readJob: (jobId) =>
       publicClient.readContract({
         address: addresses.JobContract,
@@ -124,9 +124,9 @@ async function recoverPending(providerUrl: string): Promise<void> {
 }
 
 async function main() {
-  const { account } = agentC();
+  const evaluator = await agentC();
   const providerUrl = process.env.AGENT_B_URL ?? "http://127.0.0.1:4020";
-  console.log(`[agent-c] evaluator ${account.address}, provider at ${providerUrl}`);
+  console.log(`[agent-c] evaluator ${evaluator.address}, provider at ${providerUrl}`);
 
   // Before watching, catch up on anything missed while down.
   try {

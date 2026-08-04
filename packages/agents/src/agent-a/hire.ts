@@ -1,4 +1,4 @@
-import { parseEventLogs } from "viem";
+import { parseEventLogs, type Abi } from "viem";
 import {
   addresses,
   JobContractAbi,
@@ -10,7 +10,6 @@ import {
 } from "@agentrail/shared";
 import { publicClient, agentA } from "../lib/wallet.js";
 import { composeBrief } from "./llm.js";
-import { waitForAllowance, fundWithRetry } from "./fund.js";
 
 export interface QuoteResponse {
   price: string; // USDC minor units, as string
@@ -62,7 +61,7 @@ function evaluatorAddress(): `0x${string}` {
 /// the brief is posted before fundJob so it is already in the provider's hands
 /// when JobFunded fires and its worker wakes.
 export async function hire(agentBUrl: string, goal: string): Promise<HireResult> {
-  const { wallet, account } = agentA();
+  const client = await agentA();
 
   const res = await fetch(`${agentBUrl}/task`);
   if (res.status !== 402) {
@@ -82,26 +81,30 @@ export async function hire(agentBUrl: string, goal: string): Promise<HireResult>
   console.log(`[agent-a] brief: "${brief.title}" (${brief.requirements.length} requirements)`);
 
   const evaluator = evaluatorAddress();
-  const createHash = await wallet.writeContract({
-    address: addresses.JobContract,
-    abi: JobContractAbi,
-    functionName: "createJob",
-    args: [quote.provider, evaluator, amount],
-  });
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+
+  // createJob first, alone, because its jobId keys everything after it and a
+  // receipt is the only way to learn it.
+  const createTx = await client.send([
+    {
+      to: addresses.JobContract,
+      abi: JobContractAbi as Abi,
+      functionName: "createJob",
+      args: [quote.provider, evaluator, amount],
+    },
+  ]);
+  const receipt = await publicClient.getTransactionReceipt({ hash: createTx });
 
   // createJob returns the id, but a return value is not readable from a receipt
   // — recover it from the event. Decode the receipt's own logs rather than
   // querying the chain again by block: a second round trip against a
-  // load-balanced public RPC can hit a node that has not seen the block yet,
-  // which surfaces as a zero blockHash and "block not found".
+  // load-balanced endpoint can hit a node that has not seen the block yet.
   const created = parseEventLogs({
     abi: JobContractAbi,
     eventName: "JobCreated",
     logs: receipt.logs,
   });
   const mine = created.find(
-    (e) => e.args.client?.toLowerCase() === account.address.toLowerCase(),
+    (e) => e.args.client?.toLowerCase() === client.address.toLowerCase(),
   );
   if (mine?.args.jobId === undefined) {
     throw new Error("createJob emitted no JobCreated event for this client");
@@ -118,51 +121,24 @@ export async function hire(agentBUrl: string, goal: string): Promise<HireResult>
     throw new Error(`provider rejected the commission: HTTP ${commissioned.status}`);
   }
 
-  const approveHash = await wallet.writeContract({
-    address: addresses.MockUSDC,
-    abi: MockUSDCAbi,
-    functionName: "approve",
-    args: [addresses.JobContract, amount],
-  });
-  const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
-  if (approveReceipt.status !== "success") {
-    throw new Error(`approve reverted (tx ${approveHash}) — job ${jobId} left unfunded`);
-  }
-
-  // Both retry, because a receipt does not guarantee the next request sees the
-  // state it wrote — see fund.ts.
-  await waitForAllowance({
-    amount,
-    readAllowance: () =>
-      publicClient.readContract({
-        address: addresses.MockUSDC,
-        abi: MockUSDCAbi,
-        functionName: "allowance",
-        args: [account.address, addresses.JobContract],
-      }) as Promise<bigint>,
-  });
-
-  await fundWithRetry({
-    readState: async () =>
-      (
-        await publicClient.readContract({
-          address: addresses.JobContract,
-          abi: JobContractAbi,
-          functionName: "getJob",
-          args: [jobId],
-        })
-      ).state,
-    send: async () => {
-      const hash = await wallet.writeContract({
-        address: addresses.JobContract,
-        abi: JobContractAbi,
-        functionName: "fundJob",
-        args: [jobId],
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      return { status: receipt.status, hash };
+  // approve and fundJob go together. Sent separately they race the endpoint:
+  // approve is mined, but the node estimating gas for fundJob has not applied
+  // that block, so transferFrom sees a zero allowance and estimation reverts
+  // with a bare "execution reverted". Batched, there is no window between them.
+  await client.send([
+    {
+      to: addresses.MockUSDC,
+      abi: MockUSDCAbi as Abi,
+      functionName: "approve",
+      args: [addresses.JobContract, amount],
     },
-  });
+    {
+      to: addresses.JobContract,
+      abi: JobContractAbi as Abi,
+      functionName: "fundJob",
+      args: [jobId],
+    },
+  ]);
   console.log(`[agent-a] job ${jobId} funded with ${formatUsdc(amount)} USDC — escrow held`);
 
   return { jobId, brief, quote };

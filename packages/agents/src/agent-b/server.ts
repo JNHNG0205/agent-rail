@@ -58,10 +58,10 @@ function isPosterBriefShape(value: unknown): value is PosterBrief {
   );
 }
 
-export function startServer(): Server {
+export async function startServer(): Promise<Server> {
   const port = Number(process.env.AGENT_B_PORT ?? 4020);
   const priceUsdc = process.env.AGENT_B_PRICE_USDC ?? "10";
-  const { account } = agentB();
+  const provider = await agentB();
 
   const server = createServer(async (req, res) => {
     const path = (req.url ?? "").split("?")[0] ?? "";
@@ -75,7 +75,7 @@ export function startServer(): Server {
     if (req.method === "GET" && path === "/task") {
       json(402, {
         price: (BigInt(priceUsdc) * 10n ** 6n).toString(),
-        provider: account.address,
+        provider: provider.address,
         contract: addresses.JobContract,
         service: "poster-design",
         description: "One poster delivered as a self-contained SVG document.",

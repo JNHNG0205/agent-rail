@@ -1,3 +1,4 @@
+import type { Abi } from "viem";
 import { addresses, JobContractAbi, formatUsdc } from "@agentrail/shared";
 import { publicClient, agentB } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
@@ -8,8 +9,8 @@ import { getCommission, rememberDeliverable } from "./server.js";
 /// Listens for JobFunded, designs the poster it was commissioned to produce, and
 /// submits the deliverable hash on-chain. The SVG itself stays off-chain and is
 /// served over HTTP for the evaluator to fetch and re-hash.
-export function startWorker(): () => void {
-  const { wallet, account } = agentB();
+export async function startWorker(): Promise<() => void> {
+  const provider = await agentB();
 
   const unwatch = watchEvents({
     address: addresses.JobContract,
@@ -31,7 +32,7 @@ export function startWorker(): () => void {
             args: [jobId],
           });
 
-          if (job.provider.toLowerCase() !== account.address.toLowerCase()) continue;
+          if (job.provider.toLowerCase() !== provider.address.toLowerCase()) continue;
 
           const brief = getCommission(jobId);
           if (!brief) {
@@ -52,13 +53,14 @@ export function startWorker(): () => void {
           // DeliverableSubmitted for content it cannot yet fetch.
           rememberDeliverable(jobId, svg);
 
-          const hash = await wallet.writeContract({
-            address: addresses.JobContract,
-            abi: JobContractAbi,
-            functionName: "submitDeliverable",
-            args: [jobId, deliverableHash],
-          });
-          await publicClient.waitForTransactionReceipt({ hash });
+          await provider.send([
+            {
+              to: addresses.JobContract,
+              abi: JobContractAbi as Abi,
+              functionName: "submitDeliverable",
+              args: [jobId, deliverableHash],
+            },
+          ]);
 
           console.log(
             `[agent-b] job ${jobId} submitted, hash ${deliverableHash.slice(0, 18)}… (${svg.length} bytes)`,

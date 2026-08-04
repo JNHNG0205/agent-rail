@@ -15,7 +15,7 @@ before(async () => {
   process.env.AGENT_B_PRIVATE_KEY =
     "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
-  server = startServer();
+  server = await startServer();
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const { port } = server.address() as AddressInfo;
   baseUrl = `http://127.0.0.1:${port}`;
