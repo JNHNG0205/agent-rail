@@ -6,6 +6,7 @@ import {
 } from "@agentrail/shared";
 import { getCommission, getDeliverable, rememberCommission } from "./work.js";
 import { balanceOf, withdraw } from "./withdraw.js";
+import { fundWalletGas } from "./gas.js";
 import { addresses } from "@agentrail/shared";
 import {
   createAgent,
@@ -321,6 +322,43 @@ export function startRuntime(): Promise<Server> {
           return;
         }
         json(200, { balanceUsdc: (await balanceOf(agent.id)).toString() });
+        return;
+      }
+
+
+      // POST /wallet/gas — enough ETH for a person to sign one transfer.
+      //
+      // Not agent-scoped: it funds the caller's own wallet so they can deposit
+      // INTO an agent. The destination is proved by the web layer against the
+      // wallets Privy signed for, exactly as withdrawal is.
+      if (method === "POST" && parts.length === 2 && parts[0] === "wallet" && parts[1] === "gas") {
+        const body: unknown = JSON.parse(await readBody(req));
+        const b = body as { to?: unknown };
+        if (typeof b.to !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(b.to)) {
+          json(400, { error: "to must be an address" });
+          return;
+        }
+        if (!callerOwner(req)) {
+          json(401, { error: "sign in first" });
+          return;
+        }
+        const key = treasuryKey();
+        if (!key) {
+          // Local chains fund accounts at genesis; only a public chain needs a
+          // treasury, and without one this cannot work rather than half-work.
+          json(400, { error: "no treasury is configured on this chain" });
+          return;
+        }
+        try {
+          const result = await fundWalletGas(key, b.to as `0x${string}`);
+          json(200, {
+            txHash: result.txHash,
+            balanceWei: result.balance.toString(),
+            alreadyFunded: result.txHash === null,
+          });
+        } catch (err) {
+          json(400, { error: err instanceof Error ? err.message : "could not send gas" });
+        }
         return;
       }
 

@@ -1,0 +1,90 @@
+"use client";
+
+import { useCallback, useState } from "react";
+import { encodeFunctionData } from "viem";
+import { useSendTransaction } from "@privy-io/react-auth";
+import { MockUSDCAbi, addresses, parseUsdc, formatUsdc } from "@agentrail/shared";
+import { useAuthedFetch, useSession } from "@/lib/session";
+
+/// Putting your own money into your agent. Member 4.
+///
+/// The mirror of withdrawal, and deliberately not its equal. Taking money out
+/// happens server-side, because the agent's key is held there. Putting money in
+/// cannot: the funds are in a wallet only the person controls, so they sign it
+/// themselves. That asymmetry is the honest shape of the system — the platform
+/// can spend an agent's balance and cannot touch yours.
+///
+/// One wrinkle stands in the way. A wallet created at sign-in has never held
+/// ETH, and a wallet with no ETH cannot sign anything, so the treasury covers
+/// the gas for the first move. That is a testnet faucet, not a solved problem —
+/// on a real network the person would hold ETH, or the app would sponsor it
+/// through a paymaster.
+
+export type DepositStage = "idle" | "gas" | "signing" | "confirming" | "done";
+
+export function useDeposit() {
+  const { address } = useSession();
+  const authedFetch = useAuthedFetch();
+  const { sendTransaction } = useSendTransaction();
+  const [stage, setStage] = useState<DepositStage>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const deposit = useCallback(
+    async (to: `0x${string}`, amountUsdc: string): Promise<`0x${string}` | null> => {
+      setError(null);
+
+      if (!address) {
+        setError("connect a wallet to deposit from");
+        return null;
+      }
+
+      let amount: bigint;
+      try {
+        // Integer minor units, never a float — the same parser the escrow uses,
+        // so what is quoted here is what the chain receives.
+        amount = parseUsdc(amountUsdc);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "that is not a USDC amount");
+        return null;
+      }
+      if (amount <= 0n) {
+        setError("enter an amount greater than zero");
+        return null;
+      }
+
+      try {
+        // Gas first. Asking someone to sign and watching it fail for want of a
+        // fraction of a cent is a worse experience than a moment's wait.
+        setStage("gas");
+        const gas = await authedFetch("/api/wallet/gas", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ to: address }),
+        });
+        const gasBody = (await gas.json()) as { error?: string };
+        if (gasBody.error) throw new Error(gasBody.error);
+
+        setStage("signing");
+        const { hash } = await sendTransaction({
+          to: addresses.MockUSDC,
+          data: encodeFunctionData({
+            abi: MockUSDCAbi,
+            functionName: "transfer",
+            args: [to, amount],
+          }),
+        });
+
+        setStage("confirming");
+        return hash;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "the deposit did not go through");
+        return null;
+      } finally {
+        setStage("idle");
+      }
+    },
+    [address, authedFetch, sendTransaction],
+  );
+
+  return { deposit, stage, error, formatUsdc };
+}

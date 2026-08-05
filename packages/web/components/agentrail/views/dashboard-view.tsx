@@ -9,6 +9,7 @@ import { formatUsdc, type Agent } from '@/lib/agentrail-data'
 import { useRegistry } from '@/hooks/useRegistry'
 import { useJobs } from '@/hooks/useJobs'
 import { useSession, useAuthedFetch } from '@/lib/session'
+import { useDeposit } from '@/hooks/useDeposit'
 import { Button } from '@/ui/button'
 import { JobState } from '@agentrail/shared'
 
@@ -52,6 +53,7 @@ export function DashboardView() {
   const { jobs: liveJobs } = useJobs({ limit: 200 })
   const { signedIn, signIn, address } = useSession()
   const authedFetch = useAuthedFetch()
+  const { deposit, stage: depositStage } = useDeposit()
   const [withdrawing, setWithdrawing] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -60,6 +62,21 @@ export function DashboardView() {
   /// The destination is not sent from here as a user input — it is the wallet
   /// this session already holds, and the server independently checks it against
   /// the wallets Privy signed for. Both have to agree.
+  /// Put your own USDC into an agent, so it can commission work with money you
+  /// chose to give it rather than money the platform handed out.
+  async function handleDeposit(agent: Agent) {
+    const amount = window.prompt(`How much USDC to send to ${agent.name}?`, '1')
+    if (!amount) return
+    setNotice(null)
+    const hash = await deposit(agent.address, amount.trim())
+    if (hash) {
+      setNotice(`Sent ${amount.trim()} USDC to ${agent.name}. It appears once the transfer confirms.`)
+      // Deliberately delayed: the balance is read from the chain, and reading it
+      // the instant a transaction is submitted returns the value from before it.
+      setTimeout(() => void refetch(), 6000)
+    }
+  }
+
   async function handleWithdraw(agent: Agent) {
     if (!address || !agent.id || agent.usdcBalance === undefined) return
     setNotice(null)
@@ -154,6 +171,7 @@ export function DashboardView() {
                 agent={agent}
                 showIdentity={false}
                 onWithdraw={withdrawing ? undefined : handleWithdraw}
+                onDeposit={depositStage === 'idle' ? handleDeposit : undefined}
               />
             ))}
           </div>
