@@ -3,7 +3,7 @@ import { addresses, JobContractAbi, formatUsdc } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
 import { hashDeliverable } from "../lib/hash.js";
-import { runTask } from "../agent-b/llm.js";
+import { runTask } from "../provider/poster.js";
 import { listAgents, accountOf, type AgentRecord } from "./store.js";
 import { getCommission, rememberDeliverable } from "./server.js";
 

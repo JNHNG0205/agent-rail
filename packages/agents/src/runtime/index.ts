@@ -3,6 +3,7 @@ import { startRuntime } from "./server.js";
 import { startProviderWorker } from "./worker.js";
 import { listAgents, importLegacyFile, createAgent, accountOf } from "./store.js";
 import { onboard, describe } from "../lib/onboard.js";
+import { claimOverdue } from "./claim.js";
 
 /// Every user talks to a client agent, and nobody should have to create one
 /// before they can say anything. So the runtime provisions it at startup rather
@@ -49,6 +50,16 @@ async function main() {
     for (const a of existing) {
       console.log(`[runtime] hosting ${a.role} "${a.name}" (${a.id}) at ${a.address}`);
     }
+  }
+
+  // Collect for delivered work the evaluator never ruled on. The contract's
+  // remedy for a silent evaluator only exists if something exercises it.
+  try {
+    const claimed = await claimOverdue();
+    if (claimed.length === 0) console.log("[runtime] nothing overdue to claim");
+  } catch (err) {
+    // Never let a cleanup pass stop the runtime from serving.
+    console.error("[runtime] timeout claim pass failed:", err instanceof Error ? err.message : err);
   }
 
   const unwatch = startProviderWorker();

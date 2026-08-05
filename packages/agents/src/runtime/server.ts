@@ -60,7 +60,7 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function isPosterBrief(value: unknown): value is PosterBrief {
+export function isPosterBrief(value: unknown): value is PosterBrief {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
@@ -73,7 +73,7 @@ function isPosterBrief(value: unknown): value is PosterBrief {
   );
 }
 
-function isServiceOffer(value: unknown): value is ServiceOffer {
+export function isServiceOffer(value: unknown): value is ServiceOffer {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (

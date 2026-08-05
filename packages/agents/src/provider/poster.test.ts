@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import type { PosterBrief } from "@agentrail/shared";
-import { runTask } from "./llm.js";
+import { runTask } from "./poster.js";
 
 const BRIEF: PosterBrief = {
   title: "AgentRail Demo Day",

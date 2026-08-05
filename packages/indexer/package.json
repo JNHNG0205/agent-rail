@@ -7,7 +7,8 @@
     "dev": "ponder dev --schema public",
     "start": "ponder start --schema public",
     "codegen": "ponder codegen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@agentrail/shared": "*",
