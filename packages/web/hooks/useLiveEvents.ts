@@ -32,7 +32,7 @@ export interface FormattedEvent {
 /// a query against a local table, not a billed archival log scan.
 const POLL_MS = 5_000;
 
-function usdcFrom(args: Record<string, unknown>): string | undefined {
+export function usdcFrom(args: Record<string, unknown>): string | undefined {
   // Amounts arrive as strings — JSON has no bigint — and are minor units, so
   // they go through BigInt rather than Number, which loses precision above 2^53
   // and is the wrong type for money regardless.
@@ -45,7 +45,7 @@ function usdcFrom(args: Record<string, unknown>): string | undefined {
   }
 }
 
-function describe(eventName: string, jobId: string | undefined, amount?: string): string {
+export function describeEvent(eventName: string, jobId: string | undefined, amount?: string): string {
   switch (eventName) {
     case "JobCreated":
       return `Job #${jobId} created with ${amount ?? "0 USDC"}`;
@@ -63,7 +63,7 @@ function describe(eventName: string, jobId: string | undefined, amount?: string)
   }
 }
 
-function toFormatted(row: ChainEvent): FormattedEvent {
+export function toFormatted(row: ChainEvent): FormattedEvent {
   const args = (row.args ?? {}) as Record<string, unknown>;
   const jobId = row.jobId != null ? String(row.jobId) : undefined;
   const formattedAmount = usdcFrom(args);
@@ -73,7 +73,7 @@ function toFormatted(row: ChainEvent): FormattedEvent {
     jobId,
     txHash: row.txHash as `0x${string}`,
     formattedAmount,
-    details: describe(row.eventName, jobId, formattedAmount),
+    details: describeEvent(row.eventName, jobId, formattedAmount),
     // The block's time, not the browser's. A backfilled event is not something
     // that just happened, and stamping it with now() reorders the feed.
     timestamp: new Date(Number(row.blockTimestamp) * 1000),
