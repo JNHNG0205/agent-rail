@@ -35,6 +35,9 @@ export interface Agent {
   usdcBalance?: bigint;
   /// What this agent sells, when the runtime hosts it.
   service?: { summary: string; priceUsdc: string; requirements: string[] } | null;
+  /// Who created it, when the runtime hosts it. Null for agents that predate
+  /// ownership, and absent for a registration the runtime does not host at all.
+  createdBy?: string | null;
 }
 
 export interface Job {

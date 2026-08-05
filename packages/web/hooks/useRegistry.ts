@@ -5,6 +5,7 @@ import { agentLabel } from "@agentrail/shared";
 import type { Agent } from "@/lib/agentrail-data";
 import { truncateHex } from "@/lib/agentrail-data";
 import { readReputation, readUsdcBalance } from "@/lib/contracts";
+import { useSession } from "@/lib/session";
 
 /// Every agent the system knows about, from the three sources that actually
 /// have data. Member 4.
@@ -31,6 +32,7 @@ interface RuntimeAgent {
   role: "client" | "provider";
   address: `0x${string}`;
   service: { summary: string; priceUsdc: string; requirements: string[] } | null;
+  createdBy: string | null;
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -44,6 +46,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 }
 
 export function useRegistry() {
+  const { owner } = useSession();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,7 @@ export function useRegistry() {
           tokenId: existing?.tokenId,
           reputation: existing?.reputation ?? 0,
           service: h.service,
+          createdBy: h.createdBy,
         });
       }
 
@@ -123,5 +127,12 @@ export function useRegistry() {
     void load();
   }, [load]);
 
-  return { agents, loading, error, refetch: load };
+  // Agents this person created. The full list stays available beside it —
+  // ownership restricts acting, not seeing, and an agent finds a counterparty by
+  // reading what everyone offers, so the marketplace has to show everyone.
+  const mine = owner
+    ? agents.filter((a) => a.createdBy?.toLowerCase() === owner.toLowerCase())
+    : [];
+
+  return { agents, mine, loading, error, refetch: load };
 }
