@@ -112,26 +112,69 @@ if leaked never exists in this repository.
 
 ### 2.4 Testnet accounts
 
-Five accounts, and their separation is deliberate:
+The system uses five accounts. Generating them by hand in a wallet means a lot
+of clicking and a good chance of pasting the wrong key into the wrong file, so
+there is a command for it:
 
-| Account | Role | Needs ETH |
+```bash
+npm run accounts:new
+```
+
+It prints five accounts, says which three need funding, and gives the exact
+lines to paste into each file. It writes nothing — copy what you need and run it
+again if you lose the output.
+
+**These are throwaway testnet keys.** They are generated on your machine and
+printed to your terminal, which is fine for accounts holding faucet ETH and
+unacceptable for anything else. Never fund them on a real network.
+
+#### What each account is for
+
+| Account | Needs ETH | Role |
 |---|---|---|
-| Deployer | Deploys the contracts. **Never an agent.** | yes |
-| Agent A | Seed client | a little |
-| Agent B | Seed provider | a little |
-| Agent C | **The evaluator** | yes |
-| Treasury | Funds new agents' first gas | yes |
+| **Deployer** | ~0.05 | Deploys the contracts. **Never an agent.** |
+| **Agent C** | ~0.05 | The evaluator. Signs every verdict. |
+| **Treasury** | ~0.05 | Pays each new agent's first gas. |
+| Agent A | no | Seed client — funded by the seed script |
+| Agent B | no | Seed provider — funded by the seed script |
 
-Create them in any wallet, then fund the deployer, evaluator and treasury from
-<https://www.alchemy.com/faucets/base-sepolia>. About 0.05 ETH each is ample.
-
-The deployer is deliberately not an agent. It owns `JobContract` and
+The separation is the design, not caution. The deployer owns `JobContract` and
 `ReputationRegistry`, and an owner can re-point the identity registry, the
 evaluator module and the reputation registry — an agent holding that key could
-rewrite the rules constraining its own job.
+rewrite the rules constraining its own job. The evaluator's key signs the
+verdict that releases money, so a client holding it could approve its own
+payment, which is the single thing this design exists to prevent.
 
-**If you use the already-deployed contracts** (section 5.1), you do not need a
-deployer at all — only the evaluator and the treasury.
+**If you use the already-deployed contracts** (section 5.1) you need no deployer
+at all — only Agent C and the Treasury.
+
+#### Funding the three accounts
+
+Any Base Sepolia faucet works. These need no prior balance and no Coinbase
+account:
+
+| Faucet | Amount | Notes |
+|---|---|---|
+| <https://faucet.quicknode.com/base/sepolia> | varies | no account needed |
+| <https://www.ethereum-ecosystem.com/faucets/base-sepolia> | 0.5 ETH / day | no sign-in |
+| <https://portal.cdp.coinbase.com/products/faucet> | 0.1 ETH / day | needs a free Coinbase Developer account |
+
+Paste each address in and claim. Some faucets — Alchemy's among them — require a
+balance on Ethereum mainnet before they will send anything; if you hit that,
+use one of the three above instead.
+
+0.05 ETH per account is ample. Gas on Base Sepolia is cheap, and the treasury
+sends only 0.0008 ETH to each new agent.
+
+#### Checking it worked
+
+```bash
+npm run preflight:base-sepolia
+```
+
+It reports each account's balance and whether it is registered, and refuses to
+start the system if something is missing — which is more useful than discovering
+it half way through a demo.
 
 ---
 

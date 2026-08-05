@@ -31,7 +31,8 @@
     "dev": "bash scripts/dev.sh",
     "dev:base-sepolia": "bash scripts/dev.sh base-sepolia",
     "demo:reset": "bash scripts/demo-reset.sh",
-    "preflight:base-sepolia": "tsx scripts/preflight.ts"
+    "preflight:base-sepolia": "tsx scripts/preflight.ts",
+    "accounts:new": "tsx scripts/new-accounts.ts"
   },
   "engines": {
     "node": ">=20"

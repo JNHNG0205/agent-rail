@@ -1,0 +1,110 @@
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
+/// Generate the five testnet accounts this project needs, ready to paste.
+///
+/// "Create five accounts in a wallet and export their private keys" is a page of
+/// clicking and a good chance of pasting the wrong one into the wrong file. This
+/// prints them in the exact shape the two env files expect, in the order the
+/// system reads them.
+///
+/// TESTNET ONLY. These keys are generated on your machine and printed to your
+/// terminal, which is fine for an account holding faucet ETH and unacceptable
+/// for one holding anything real. Nothing here should ever be funded on a
+/// network where value is at stake.
+///
+/// Roles are separated deliberately, and the separation is the design rather
+/// than caution:
+///
+///   deployer   owns JobContract and ReputationRegistry, and an owner can
+///              re-point the identity registry, the evaluator module and the
+///              reputation registry. An agent holding this could rewrite the
+///              rules constraining its own job, so it is never an agent.
+///   evaluator  signs the verdict that settles or refunds. A client holding
+///              this key could approve its own payment, which is the one thing
+///              the whole design exists to prevent.
+///   treasury   pays the first gas for every agent a user creates. It holds no
+///              authority at all — only ETH.
+
+interface Role {
+  name: string;
+  env: string;
+  file: string;
+  needsEth: string;
+  why: string;
+}
+
+const ROLES: Role[] = [
+  {
+    name: "Deployer",
+    env: "BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY",
+    file: ".env",
+    needsEth: "~0.05",
+    why: "deploys the contracts; never an agent",
+  },
+  {
+    name: "Agent A",
+    env: "BASE_SEPOLIA_AGENT_A_PRIVATE_KEY",
+    file: ".env",
+    needsEth: "—",
+    why: "seed client, funded by the seed script",
+  },
+  {
+    name: "Agent B",
+    env: "BASE_SEPOLIA_AGENT_B_PRIVATE_KEY",
+    file: ".env",
+    needsEth: "—",
+    why: "seed provider, funded by the seed script",
+  },
+  {
+    name: "Agent C",
+    env: "BASE_SEPOLIA_AGENT_C_PRIVATE_KEY",
+    file: ".env and packages/agents/.env",
+    needsEth: "~0.05",
+    why: "the evaluator; signs every verdict",
+  },
+  {
+    name: "Treasury",
+    env: "BASE_SEPOLIA_TREASURY_PRIVATE_KEY",
+    file: "packages/agents/.env",
+    needsEth: "~0.05",
+    why: "pays each new agent's first gas",
+  },
+];
+
+const generated = ROLES.map((role) => {
+  const privateKey = generatePrivateKey();
+  return { role, privateKey, address: privateKeyToAccount(privateKey).address };
+});
+
+console.log("\nFive testnet accounts. TESTNET ONLY — never fund these on a real network.\n");
+
+console.log("Fund these three from a Base Sepolia faucet:\n");
+for (const { role, address } of generated) {
+  if (role.needsEth !== "—") {
+    console.log(`  ${role.name.padEnd(10)} ${address}   ${role.needsEth} ETH   (${role.why})`);
+  }
+}
+console.log("\n  https://portal.cdp.coinbase.com/products/faucet   0.1 ETH per day");
+console.log("  https://faucet.quicknode.com/base/sepolia         no account needed");
+console.log("  https://www.ethereum-ecosystem.com/faucets/base-sepolia   0.5 ETH per day\n");
+
+console.log("The other two need no ETH — `npm run seed:base-sepolia` funds them.\n");
+
+console.log("─".repeat(72));
+console.log("\nPaste into .env\n");
+for (const { role, privateKey } of generated) {
+  if (role.file.includes(".env") && !role.file.startsWith("packages")) {
+    console.log(`${role.env}=${privateKey}`);
+  }
+}
+
+console.log("\nPaste into packages/agents/.env\n");
+const evaluator = generated.find((g) => g.role.name === "Agent C")!;
+const treasury = generated.find((g) => g.role.name === "Treasury")!;
+console.log(`BASE_SEPOLIA_AGENT_C_PRIVATE_KEY=${evaluator.privateKey}`);
+// The address, not the key. Anything that creates a job needs to name the
+// evaluator; giving it the key would let it sign its own verdict.
+console.log(`BASE_SEPOLIA_EVALUATOR_ADDRESS=${evaluator.address}`);
+console.log(`BASE_SEPOLIA_TREASURY_PRIVATE_KEY=${treasury.privateKey}`);
+console.log("\n" + "─".repeat(72));
+console.log("\nThen: npm run preflight:base-sepolia — it checks funding and registration.\n");
