@@ -46,21 +46,46 @@ export interface HiredJob {
   kind: DeliverableKind;
 }
 
-/// The last job commissioned, kept across reloads.
+/// The jobs commissioned in this session, kept across reloads.
 ///
-/// It lived only in React state, so refreshing the page lost the one link to the
-/// work that had just been paid for — the job continues on chain either way, but
-/// the person who commissioned it had no way back to the result. Deliberately
-/// only the job, not the conversation: the chat is cheap to start again and the
-/// result is not.
-const LAST_JOB_KEY = "agentrail.last-job";
+/// A list, not one slot. It held a single job until recently, so commissioning a
+/// second replaced the first — and starting a new request cleared it outright,
+/// which meant the ordinary way of asking for a second thing hid work that was
+/// still running. Nothing was lost on chain; what was lost was the ability to
+/// watch it, which is the entire purpose of this panel.
+///
+/// Several at once is also the more honest picture. Agents work concurrently and
+/// independently, and a UI that can only show one at a time quietly claims
+/// otherwise.
+///
+/// Deliberately only the jobs, not the conversation: a chat is cheap to start
+/// again and a result is not.
+const JOBS_KEY = "agentrail.jobs";
 
-function loadLastJob(): HiredJob | null {
+/// Enough to watch a few things at once without the panel becoming a history —
+/// the Escrow Jobs tab is where every job ever lives.
+const MAX_TRACKED = 4;
+
+function loadJobs(): HiredJob[] {
   try {
-    const raw = window.localStorage.getItem(LAST_JOB_KEY);
-    return raw ? (JSON.parse(raw) as HiredJob) : null;
+    const raw = window.localStorage.getItem(JOBS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    // Tolerates the single-object shape this key used to hold, so an open tab
+    // from before the change does not throw on its own stored data.
+    if (Array.isArray(parsed)) return parsed as HiredJob[];
+    return parsed && typeof parsed === "object" ? [parsed as HiredJob] : [];
   } catch {
-    return null;
+    return [];
+  }
+}
+
+function saveJobs(jobs: HiredJob[]): void {
+  try {
+    window.localStorage.setItem(JOBS_KEY, JSON.stringify(jobs));
+  } catch {
+    // A full or blocked store must not fail a commission that already happened
+    // on chain — the job is real whether or not this is written.
   }
 }
 
@@ -81,7 +106,7 @@ export function useAssistant() {
   const [providerId, setProviderId] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
   const [hiring, setHiring] = useState(false);
-  const [job, setJob] = useState<HiredJob | null>(null);
+  const [jobs, setJobs] = useState<HiredJob[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Guards against a second send while one is in flight — the model takes a
@@ -128,7 +153,7 @@ export function useAssistant() {
   // localStorage there would either crash or produce markup the browser
   // disagrees with.
   useEffect(() => {
-    setJob(loadLastJob());
+    setJobs(loadJobs());
   }, []);
 
   // Waits for `ready`: acting on a not-yet-restored session would create a
@@ -206,13 +231,14 @@ export function useAssistant() {
         amountUsdc: (BigInt(body.amount) / 1_000_000n).toString(),
         kind: body.provider.service?.deliverable ?? "svg",
       };
-      setJob(hired);
-      try {
-        window.localStorage.setItem(LAST_JOB_KEY, JSON.stringify(hired));
-      } catch {
-        // A full or blocked store must not fail a commission that already
-        // happened on chain — the job is real whether or not this is written.
-      }
+      setJobs((prev) => {
+        // Newest first, and never twice: hiring is idempotent from the caller's
+        // side only in that the chain assigns one id, so a repeated response
+        // must not produce a second card.
+        const next = [hired, ...prev.filter((j) => j.jobId !== hired.jobId)].slice(0, MAX_TRACKED);
+        saveJobs(next);
+        return next;
+      });
       setMessages((prev) => [
         ...prev,
         {
@@ -228,17 +254,23 @@ export function useAssistant() {
     }
   }, [client, brief, providerId, hiring, authedFetch]);
 
+  /// Stop showing a job. Only ever removes the card — the job is on chain and
+  /// continues regardless, and the Escrow Jobs tab still has it.
+  const dismissJob = useCallback((jobId: string) => {
+    setJobs((prev) => {
+      const next = prev.filter((j) => j.jobId !== jobId);
+      saveJobs(next);
+      return next;
+    });
+  }, []);
+
   const reset = useCallback(() => {
     setMessages([GREETING]);
     setBrief(null);
     setProviderId(null);
-    setJob(null);
     setError(null);
-    try {
-      window.localStorage.removeItem(LAST_JOB_KEY);
-    } catch {
-      // Nothing to do; the panel is already cleared in memory.
-    }
+    // The jobs stay. "New request" starts a new conversation; it does not
+    // abandon work that is still running and still owed to somebody.
   }, []);
 
   const providers = agents.filter((a) => a.role === "provider");
@@ -250,7 +282,8 @@ export function useAssistant() {
     brief,
     thinking,
     hiring,
-    job,
+    jobs,
+    dismissJob,
     error,
     send,
     hire,

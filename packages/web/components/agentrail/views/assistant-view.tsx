@@ -8,13 +8,14 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  X,
   Download,
   ExternalLink,
   Copy,
   Check,
 } from "lucide-react";
 import { Button } from "@/ui/button";
-import { useAssistant } from "@/hooks/useAssistant";
+import { useAssistant, type HiredJob } from "@/hooks/useAssistant";
 import { useSession } from "@/lib/session";
 import { useJobResult, type JobStage } from "@/hooks/useJobResult";
 import { cn } from "@/lib/utils";
@@ -63,10 +64,15 @@ function Progress({ stage, outcome }: { stage: JobStage | null; outcome: string 
   );
 }
 
-export function AssistantView() {
-  const { client, providers, messages, brief, thinking, hiring, job, error, send, hire, reset, needsSignIn } =
-    useAssistant();
-  const { signIn } = useSession();
+
+/// One commissioned job, watching itself.
+///
+/// A component per job rather than one panel: useJobResult polls for a specific
+/// id, so several jobs can only progress independently if each card owns its
+/// own hook. That is also the honest picture — the agents genuinely do work at
+/// the same time.
+function JobCard({ job, onDismiss }: { job: HiredJob; onDismiss: () => void }) {
+  const result = useJobResult(job.jobId);
   const [copied, setCopied] = useState(false);
 
   /// Copying beats downloading for a document someone is about to paste. The
@@ -82,7 +88,103 @@ export function AssistantView() {
       // Clipboard access can be refused; the download link still works.
     }
   }
-  const result = useJobResult(job?.jobId ?? null);
+
+
+  return (
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Job {job.jobId}
+                </p>
+                <p className="mt-1 text-sm">
+                  {job.providerName} · {job.amountUsdc} USDC in escrow
+                </p>
+              </div>
+              {/* Offered only once it has finished. Hiding a job that is still running
+                  is exactly how the single-card version lost track of work. */}
+              {result.stage === "Terminal" && (
+                <button
+                  type="button"
+                  onClick={onDismiss}
+                  aria-label={`Dismiss job ${job.jobId}`}
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <div className="mb-4" />
+            <Progress stage={result.stage} outcome={result.outcome} />
+
+            {result.deliverableUrl && (
+              <div className="mt-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {result.outcome === "completed" ? (
+                    <CheckCircle2 className="size-3.5 text-success" />
+                  ) : result.outcome ? (
+                    <XCircle className="size-3.5 text-destructive" />
+                  ) : null}
+                  Delivered — hash verified against the chain
+                </p>
+
+                {/* The work is the thing that was paid for, so it has to be
+                    takeable. Preview alone leaves it trapped behind a session. */}
+                <div className="mb-2 flex items-center gap-2">
+                  <a
+                    href={`${result.deliverableUrl}?download=1`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                  >
+                    <Download className="size-3.5" aria-hidden="true" /> Download
+                  </a>
+                  <a
+                    href={result.deliverableUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                  >
+                    <ExternalLink className="size-3.5" aria-hidden="true" /> Open
+                  </a>
+                  {job.kind !== "svg" && (
+                    <button
+                      type="button"
+                      onClick={() => void copyDeliverable(result.deliverableUrl!)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                    >
+                      {copied ? (
+                        <Check className="size-3.5 text-success" aria-hidden="true" />
+                      ) : (
+                        <Copy className="size-3.5" aria-hidden="true" />
+                      )}
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  )}
+                </div>
+                {/* Sandboxed: the deliverable is untrusted output from another
+                    agent, and the route serves it with a locked-down CSP. An
+                    iframe suits every kind — the route sets the content type, so
+                    the browser renders a drawing as one and a document as text. */}
+                <iframe
+                  src={result.deliverableUrl}
+                  title={`Deliverable for job ${job.jobId}`}
+                  sandbox=""
+                  className={cn(
+                    "w-full rounded-xl border border-border bg-white",
+                    // A poster is portrait; a document is not, and forcing one
+                    // into that shape wastes most of the frame on white space.
+                    job.kind === "svg" ? "aspect-[3/4]" : "h-80",
+                  )}
+                />
+              </div>
+            )}
+          </section>
+  );
+}
+
+export function AssistantView() {
+  const { client, providers, messages, brief, thinking, hiring, jobs, dismissJob, error, send, hire, reset, needsSignIn } =
+    useAssistant();
+  const { signIn } = useSession();
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -205,78 +307,9 @@ export function AssistantView() {
           </p>
         )}
 
-        {job && (
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Job {job.jobId}
-            </p>
-            <p className="mt-1 mb-4 text-sm">
-              {job.providerName} · {job.amountUsdc} USDC in escrow
-            </p>
-            <Progress stage={result.stage} outcome={result.outcome} />
-
-            {result.deliverableUrl && (
-              <div className="mt-4">
-                <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  {result.outcome === "completed" ? (
-                    <CheckCircle2 className="size-3.5 text-success" />
-                  ) : result.outcome ? (
-                    <XCircle className="size-3.5 text-destructive" />
-                  ) : null}
-                  Delivered — hash verified against the chain
-                </p>
-
-                {/* The work is the thing that was paid for, so it has to be
-                    takeable. Preview alone leaves it trapped behind a session. */}
-                <div className="mb-2 flex items-center gap-2">
-                  <a
-                    href={`${result.deliverableUrl}?download=1`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
-                  >
-                    <Download className="size-3.5" aria-hidden="true" /> Download
-                  </a>
-                  <a
-                    href={result.deliverableUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
-                  >
-                    <ExternalLink className="size-3.5" aria-hidden="true" /> Open
-                  </a>
-                  {job.kind !== "svg" && (
-                    <button
-                      type="button"
-                      onClick={() => void copyDeliverable(result.deliverableUrl!)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
-                    >
-                      {copied ? (
-                        <Check className="size-3.5 text-success" aria-hidden="true" />
-                      ) : (
-                        <Copy className="size-3.5" aria-hidden="true" />
-                      )}
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                  )}
-                </div>
-                {/* Sandboxed: the deliverable is untrusted output from another
-                    agent, and the route serves it with a locked-down CSP. An
-                    iframe suits every kind — the route sets the content type, so
-                    the browser renders a drawing as one and a document as text. */}
-                <iframe
-                  src={result.deliverableUrl}
-                  title={`Deliverable for job ${job.jobId}`}
-                  sandbox=""
-                  className={cn(
-                    "w-full rounded-xl border border-border bg-white",
-                    // A poster is portrait; a document is not, and forcing one
-                    // into that shape wastes most of the frame on white space.
-                    job.kind === "svg" ? "aspect-[3/4]" : "h-80",
-                  )}
-                />
-              </div>
-            )}
-          </section>
-        )}
+        {jobs.map((job) => (
+          <JobCard key={job.jobId} job={job} onDismiss={() => dismissJob(job.jobId)} />
+        ))}
 
         <section className="rounded-2xl border border-border bg-card p-5">
           <p className="mb-3 flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
