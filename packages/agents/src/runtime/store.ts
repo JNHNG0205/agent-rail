@@ -166,8 +166,12 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
 }
 
 /// The live account for a stored agent, for signing and sending.
+///
+/// The address was recorded when the agent was created, so it is passed rather
+/// than re-derived: the derivation is deterministic and the chain can only
+/// answer with the value already stored here.
 export function accountOf(record: AgentRecord): Promise<AgentAccount> {
-  return accountFor(record.privateKey);
+  return accountFor(record.privateKey, record.address);
 }
 
 /// What a directory listing may show. Never the key — this shape is what the

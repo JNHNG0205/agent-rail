@@ -1,15 +1,58 @@
-import { createWalletClient, createPublicClient, http, type Abi, type Hex } from "viem";
+import {
+  createWalletClient,
+  createPublicClient,
+  fallback,
+  http,
+  type Abi,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { createNonceManager, jsonRpc } from "viem/nonce";
 import { toCoinbaseSmartAccount, createBundlerClient } from "viem/account-abstraction";
 import { baseSepolia, hardhat } from "viem/chains";
-import { BASE_SEPOLIA_CHAIN_ID, CHAIN_ID, RPC_URL } from "@agentrail/shared";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  BASE_SEPOLIA_RPC_URL,
+  CHAIN_ID,
+  RPC_URL,
+} from "@agentrail/shared";
 
 const chain = CHAIN_ID === BASE_SEPOLIA_CHAIN_ID ? baseSepolia : hardhat;
 const isTestnet = CHAIN_ID === BASE_SEPOLIA_CHAIN_ID;
 
 /// Public client for reads and log polling against the active chain.
-export const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
+/// One transport for every client here, with a backoff that matches how a
+/// shared endpoint actually fails.
+///
+/// viem retries a 429 already, but three times at 150ms — all four attempts land
+/// inside a second, which is no help when the endpoint is saturated for seconds
+/// at a time. Creating an agent is the operation that feels it: it must ask the
+/// factory for an address it cannot yet know, and that one call failing aborts
+/// an onboarding that has already generated a key.
+///
+/// The delays are exponential from this base, so the last attempt is tens of
+/// seconds out. That is the right trade here — registering an agent already
+/// takes a minute, and waiting is better than losing the attempt.
+const rpcTransport = http(RPC_URL, { retryCount: 6, retryDelay: 500 });
+
+/// Reads fall back to the public endpoint when the configured one refuses.
+///
+/// The configured endpoint comes first and stays the normal path, because the
+/// public pool is load balanced and answers from nodes that have not caught up —
+/// stale state and missing blocks, which is where several of this project's
+/// hardest bugs came from. It is the worse endpoint, and it is still far better
+/// than no endpoint: a throttled key otherwise fails an operation outright, and
+/// a read that lags by a block is recoverable where a failed onboarding is not.
+///
+/// Only reads. Bundling stays on the configured endpoint alone, because the
+/// public one does not implement the method at all and answers "rpc method is
+/// unsupported" — falling back there would turn a rate limit into a hard error.
+const readTransport =
+  isTestnet && RPC_URL !== BASE_SEPOLIA_RPC_URL
+    ? fallback([rpcTransport, http(BASE_SEPOLIA_RPC_URL, { retryCount: 3, retryDelay: 500 })])
+    : rpcTransport;
+
+export const publicClient = createPublicClient({ chain, transport: readTransport });
 
 /// One call an agent wants to make. Several can go in a single send.
 export interface Call {
@@ -46,15 +89,33 @@ export interface AgentAccount {
 /// The account also becomes the agent's identity. Registering the smart account
 /// rather than the EOA means an agent is an account, which is what lets a user
 /// create one without ever handling a key.
-async function smartAccountFor(privateKey: Hex): Promise<AgentAccount> {
+async function smartAccountFor(
+  privateKey: Hex,
+  knownAddress?: `0x${string}`,
+): Promise<AgentAccount> {
   const owner = privateKeyToAccount(privateKey);
   const account = await toCoinbaseSmartAccount({
     client: publicClient,
     owners: [owner],
     version: "1",
+    // Supplying the address skips a call to the factory's getAddress. The
+    // derivation is deterministic — same owner, same nonce, same address for
+    // ever — so an address recorded when the agent was created is still correct,
+    // and asking the chain to recompute it is a round trip that can only return
+    // what we already know. It was answering that question on every operation,
+    // for every agent, until the endpoint started refusing with 429.
+    ...(knownAddress ? { address: knownAddress } : {}),
   });
   // Alchemy serves the bundler on the same endpoint, so no second URL is needed.
-  const bundler = createBundlerClient({ account, client: publicClient, transport: http(RPC_URL) });
+  // The fallback, not the configured endpoint alone. A bundler client does not
+  // only bundle: it reads blocks and estimates gas over the same transport, and
+  // those are ordinary reads the public endpoint answers perfectly well. Keeping
+  // it on one endpoint meant a rate limit on a block read failed the whole
+  // operation. eth_sendUserOperation still effectively requires the configured
+  // endpoint — the public pool does not implement it — so a fallback there
+  // reports "rpc method is unsupported" rather than the underlying 429, which is
+  // worth knowing when reading an error from this path.
+  const bundler = createBundlerClient({ account, client: publicClient, transport: readTransport });
 
   return {
     address: account.address,
@@ -100,7 +161,7 @@ const nonceManager = createNonceManager({ source: jsonRpc() });
 /// answers every request and cannot lag behind itself.
 function eoaAccountFor(privateKey: Hex): AgentAccount {
   const owner = privateKeyToAccount(privateKey, { nonceManager });
-  const wallet = createWalletClient({ account: owner, chain, transport: http(RPC_URL) });
+  const wallet = createWalletClient({ account: owner, chain, transport: readTransport });
 
   return {
     address: owner.address,
@@ -126,8 +187,30 @@ function eoaAccountFor(privateKey: Hex): AgentAccount {
   };
 }
 
-export function accountFor(privateKey: Hex): Promise<AgentAccount> {
-  return isTestnet ? smartAccountFor(privateKey) : Promise.resolve(eoaAccountFor(privateKey));
+// Built once per key and shared. This used to sit further down and served only
+// the three legacy agents, so every agent the runtime hosts re-derived its
+// address on each call — the single largest source of RPC traffic in the system,
+// and all of it recomputing a constant.
+const accounts = new Map<string, Promise<AgentAccount>>();
+
+export function accountFor(
+  privateKey: Hex,
+  knownAddress?: `0x${string}`,
+): Promise<AgentAccount> {
+  if (!isTestnet) return Promise.resolve(eoaAccountFor(privateKey));
+
+  let existing = accounts.get(privateKey);
+  if (!existing) {
+    existing = smartAccountFor(privateKey, knownAddress).catch((err: unknown) => {
+      // A failure must not be cached. A rate limit or a dropped connection is
+      // temporary, and a rejected promise left in the map would make it
+      // permanent for the lifetime of the process.
+      accounts.delete(privateKey);
+      throw err;
+    });
+    accounts.set(privateKey, existing);
+  }
+  return existing;
 }
 
 /// Which env var holds an agent's key depends on the chain, deliberately.
@@ -145,18 +228,9 @@ function keyFor(agent: "A" | "B" | "C"): Hex {
   return key as Hex;
 }
 
-// Deriving a smart account address is a network round trip, so each agent's is
-// built once and shared. Without this every call site would pay for it again.
-const cache = new Map<string, Promise<AgentAccount>>();
-
 function agent(role: "A" | "B" | "C"): Promise<AgentAccount> {
-  const key = keyFor(role);
-  let existing = cache.get(key);
-  if (!existing) {
-    existing = accountFor(key);
-    cache.set(key, existing);
-  }
-  return existing;
+  // accountFor caches, so this no longer keeps a second map of its own.
+  return accountFor(keyFor(role));
 }
 
 export const agentA = () => agent("A");
