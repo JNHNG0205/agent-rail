@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Store, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import {
+  Bot,
+  Send,
+  Store,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Download,
+  ExternalLink,
+  Copy,
+  Check,
+} from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAssistant } from "@/hooks/useAssistant";
 import { useSession } from "@/lib/session";
@@ -56,6 +67,21 @@ export function AssistantView() {
   const { client, providers, messages, brief, thinking, hiring, job, error, send, hire, reset, needsSignIn } =
     useAssistant();
   const { signIn } = useSession();
+  const [copied, setCopied] = useState(false);
+
+  /// Copying beats downloading for a document someone is about to paste. The
+  /// bytes come from the same hash-checked route the preview uses, so what is
+  /// copied is what the chain committed to.
+  async function copyDeliverable(url: string) {
+    try {
+      const res = await fetch(url);
+      await navigator.clipboard.writeText(await res.text());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be refused; the download link still works.
+    }
+  }
   const result = useJobResult(job?.jobId ?? null);
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -199,6 +225,39 @@ export function AssistantView() {
                   ) : null}
                   Delivered — hash verified against the chain
                 </p>
+
+                {/* The work is the thing that was paid for, so it has to be
+                    takeable. Preview alone leaves it trapped behind a session. */}
+                <div className="mb-2 flex items-center gap-2">
+                  <a
+                    href={`${result.deliverableUrl}?download=1`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                  >
+                    <Download className="size-3.5" aria-hidden="true" /> Download
+                  </a>
+                  <a
+                    href={result.deliverableUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                  >
+                    <ExternalLink className="size-3.5" aria-hidden="true" /> Open
+                  </a>
+                  {job.kind !== "svg" && (
+                    <button
+                      type="button"
+                      onClick={() => void copyDeliverable(result.deliverableUrl!)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                    >
+                      {copied ? (
+                        <Check className="size-3.5 text-success" aria-hidden="true" />
+                      ) : (
+                        <Copy className="size-3.5" aria-hidden="true" />
+                      )}
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  )}
+                </div>
                 {/* Sandboxed: the deliverable is untrusted output from another
                     agent, and the route serves it with a locked-down CSP. An
                     iframe suits every kind — the route sets the content type, so

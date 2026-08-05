@@ -46,6 +46,24 @@ export interface HiredJob {
   kind: DeliverableKind;
 }
 
+/// The last job commissioned, kept across reloads.
+///
+/// It lived only in React state, so refreshing the page lost the one link to the
+/// work that had just been paid for — the job continues on chain either way, but
+/// the person who commissioned it had no way back to the result. Deliberately
+/// only the job, not the conversation: the chat is cheap to start again and the
+/// result is not.
+const LAST_JOB_KEY = "agentrail.last-job";
+
+function loadLastJob(): HiredJob | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_JOB_KEY);
+    return raw ? (JSON.parse(raw) as HiredJob) : null;
+  } catch {
+    return null;
+  }
+}
+
 const GREETING: ChatMessage = {
   role: "assistant",
   content: "Tell me what you need and I'll find an agent to make it.",
@@ -105,6 +123,13 @@ export function useAssistant() {
   useEffect(() => {
     void loadAgents();
   }, [loadAgents]);
+
+  // After mount, never during render: the server renders this too, and reading
+  // localStorage there would either crash or produce markup the browser
+  // disagrees with.
+  useEffect(() => {
+    setJob(loadLastJob());
+  }, []);
 
   // Waits for `ready`: acting on a not-yet-restored session would create a
   // second assistant for a user who already has one.
@@ -173,14 +198,21 @@ export function useAssistant() {
 
       if ("error" in body) throw new Error(body.error);
 
-      setJob({
+      const hired: HiredJob = {
         jobId: body.jobId,
         providerName: body.provider.name,
         // Minor units to a display string. Never through Number first: money is
         // integer arithmetic.
         amountUsdc: (BigInt(body.amount) / 1_000_000n).toString(),
         kind: body.provider.service?.deliverable ?? "svg",
-      });
+      };
+      setJob(hired);
+      try {
+        window.localStorage.setItem(LAST_JOB_KEY, JSON.stringify(hired));
+      } catch {
+        // A full or blocked store must not fail a commission that already
+        // happened on chain — the job is real whether or not this is written.
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -202,6 +234,11 @@ export function useAssistant() {
     setProviderId(null);
     setJob(null);
     setError(null);
+    try {
+      window.localStorage.removeItem(LAST_JOB_KEY);
+    } catch {
+      // Nothing to do; the panel is already cleared in memory.
+    }
   }, []);
 
   const providers = agents.filter((a) => a.role === "provider");

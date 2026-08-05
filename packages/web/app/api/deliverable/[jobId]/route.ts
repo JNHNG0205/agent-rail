@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { readJobOnChain } from "@/lib/contracts";
 import { runtimeUrl } from "@/lib/runtime";
 import { checkDeliverable } from "@/lib/deliverable";
 
@@ -10,11 +10,27 @@ import { checkDeliverable } from "@/lib/deliverable";
 /// bytes, and re-derives the hash before returning them — a deliverable that
 /// does not match what was committed on chain is not the work that was paid for,
 /// and must not be shown as if it were.
+///
+/// The job is read from the chain, not from the indexed cache, for two reasons.
+/// The hash decides whether provider-supplied bytes are shown at all, and
+/// checking it against a cache means trusting the cache for a security
+/// decision. And the cache lags: a job settled a moment ago, or indexed while
+/// the indexer was down, would have its result reported as missing when the
+/// work exists and is verifiable.
 export const dynamic = "force-dynamic";
 
-interface ProviderRow {
-  provider: string;
-  deliverableHash: string | null;
+/// readJobOnChain returns unknown — the ABI is cast at that boundary — so the
+/// shape is checked here rather than assumed. Only the two fields this route
+/// needs: who produced the work, and what hash was committed for it.
+interface OnChainJob {
+  provider: `0x${string}`;
+  deliverableHash: `0x${string}` | null;
+}
+
+function isOnChainJob(value: unknown): value is OnChainJob {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.provider === "string" && v.provider.startsWith("0x");
 }
 
 interface DirectoryEntry {
@@ -33,23 +49,33 @@ const CONTENT_TYPES: Record<string, string> = {
   text: "text/plain; charset=utf-8",
 };
 
+/// So a saved file opens in the right thing. A poster saved without .svg is a
+/// file the operating system cannot place.
+const EXTENSIONS: Record<string, string> = {
+  svg: "svg",
+  markdown: "md",
+  text: "txt",
+};
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { jobId: string } },
 ) {
   if (!/^\d+$/.test(params.jobId)) {
     return NextResponse.json({ error: "jobId must be a number" }, { status: 400 });
   }
 
+  // Opt-in, because the same URL feeds the preview frame. Sending
+  // Content-Disposition: attachment unconditionally would make every preview
+  // download a file instead of rendering.
+  const download = new URL(request.url).searchParams.get("download") === "1";
+
   try {
-    const rows = await query<ProviderRow>(
-      `SELECT provider, deliverable_hash AS "deliverableHash" FROM job WHERE id = $1`,
-      [params.jobId],
-    );
-    const job = rows[0];
-    if (!job) {
+    const onChain = await readJobOnChain(BigInt(params.jobId));
+    if (!isOnChainJob(onChain)) {
       return NextResponse.json({ error: `no job ${params.jobId}` }, { status: 404 });
     }
+    const job = onChain;
     const directory = (await (await fetch(`${runtimeUrl()}/agents`, { cache: "no-store" })).json()) as
       | DirectoryEntry[]
       | { error: string };
@@ -85,6 +111,9 @@ export async function GET(
       return NextResponse.json(body, { status });
     }
     const kind = agent.service?.deliverable ?? "svg";
+    // Built from the job id, which is digits — nothing provider-supplied reaches
+    // this header, so there is no filename to escape and no header to inject.
+    const filename = `agentrail-job-${params.jobId}.${EXTENSIONS[kind] ?? "txt"}`;
 
     return new NextResponse(check.content, {
       status: 200,
@@ -92,6 +121,7 @@ export async function GET(
         "content-type": CONTENT_TYPES[kind] ?? CONTENT_TYPES.svg!,
         // So the browser can decide how to show it without sniffing the bytes.
         "x-deliverable-kind": kind,
+        "content-disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
         // Untrusted provider output. Served as a document rather than inline
         // markup so a script inside it cannot run against this origin.
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",

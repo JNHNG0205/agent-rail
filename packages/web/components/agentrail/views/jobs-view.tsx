@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
+  Download,
   ExternalLink,
   Fingerprint,
   Hash,
@@ -198,14 +199,22 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     Delivered work
                   </p>
-                  <a
-                    href={`/api/deliverable/${job.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                  >
-                    Open <ExternalLink className="size-3" aria-hidden="true" />
-                  </a>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`/api/deliverable/${job.id}?download=1`}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                    >
+                      <Download className="size-3" aria-hidden="true" /> Download
+                    </a>
+                    <a
+                      href={`/api/deliverable/${job.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                    >
+                      Open <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  </div>
                 </div>
                 {/* Sandboxed: untrusted output from another agent, served under
                     a locked-down CSP by the route. */}
