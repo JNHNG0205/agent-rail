@@ -58,6 +58,9 @@ export function useAssistant() {
   const [client, setClient] = useState<RuntimeAgent | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [brief, setBrief] = useState<JobBrief | null>(null);
+  // Which provider the agent chose while talking. Carried to the hire call so
+  // the job goes to the agent whose terms the user was shown and approved.
+  const [providerId, setProviderId] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
   const [hiring, setHiring] = useState(false);
   const [job, setJob] = useState<HiredJob | null>(null);
@@ -126,13 +129,19 @@ export function useAssistant() {
           body: JSON.stringify({ messages: next }),
         });
         const body = (await res.json()) as
-          | { message: string; ready: boolean; brief: JobBrief | null }
+          | {
+              message: string;
+              ready: boolean;
+              brief: JobBrief | null;
+              providerId: string | null;
+            }
           | { error: string };
 
         if ("error" in body) throw new Error(body.error);
 
         setMessages([...next, { role: "assistant", content: body.message }]);
         setBrief(body.ready ? body.brief : null);
+        setProviderId(body.ready ? body.providerId : null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "the agent could not reply");
       } finally {
@@ -152,7 +161,7 @@ export function useAssistant() {
       const res = await authedFetch(`/api/runtime/agents/${client.id}/hire`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief }),
+        body: JSON.stringify({ brief, providerId }),
       });
       const body = (await res.json()) as
         | {
@@ -185,11 +194,12 @@ export function useAssistant() {
     } finally {
       setHiring(false);
     }
-  }, [client, brief, hiring, authedFetch]);
+  }, [client, brief, providerId, hiring, authedFetch]);
 
   const reset = useCallback(() => {
     setMessages([GREETING]);
     setBrief(null);
+    setProviderId(null);
     setJob(null);
     setError(null);
   }, []);

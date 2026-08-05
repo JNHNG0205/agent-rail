@@ -30,12 +30,16 @@ export interface ChatReply {
   /// True once enough is known to hire. The caller decides whether to act on it.
   ready: boolean;
   brief: JobBrief | null;
+  /// The provider the agent means to hire. Chosen by the agent from what is on
+  /// offer — picking a counterparty is the thing it is for. Null until ready.
+  providerId: string | null;
 }
 
 interface RawReply {
   message: string;
   ready: boolean;
   request: string;
+  providerId: string;
 }
 
 const REPLY_SCHEMA = {
@@ -53,10 +57,15 @@ const REPLY_SCHEMA = {
     request: {
       type: "string",
       description:
-        "The complete request in your own words, including every detail the user gave. Empty string until ready. This is all the provider is told, so anything missing here is missing from the work.",
+        "What the user wants, in your own words, including every detail they gave. Empty string until ready. Describe ONLY the work itself — never repeat the catalogue entry, the price or the grading terms, which the provider already knows. This is all the provider is told, so anything missing here is missing from the work.",
+    },
+    providerId: {
+      type: "string",
+      description:
+        "The id in [brackets] of the agent you will hire, copied exactly from the list. Choose the one whose service actually covers the request. Empty string until ready.",
     },
   },
-  required: ["message", "ready", "request"],
+  required: ["message", "ready", "request", "providerId"],
   additionalProperties: false,
 } as const satisfies JsonSchema;
 
@@ -64,7 +73,10 @@ function isRawReply(value: unknown): value is RawReply {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.message === "string" && typeof v.ready === "boolean" && typeof v.request === "string"
+    typeof v.message === "string" &&
+    typeof v.ready === "boolean" &&
+    typeof v.request === "string" &&
+    typeof v.providerId === "string"
   );
 }
 
@@ -85,12 +97,12 @@ export function isChatHistory(value: unknown): value is ChatMessage[] {
   );
 }
 
-function systemPrompt(agent: AgentRecord, offers: ServiceOffer[]): string {
+function systemPrompt(agent: AgentRecord, offers: ProviderOffer[]): string {
   const market =
     offers.length > 0
       ? offers.map(
           (o) =>
-            `- ${o.summary} (${o.priceUsdc} USDC), delivered as ${o.deliverable ?? "svg"}, graded on: ${o.requirements.join("; ")}`,
+            `- [${o.id}] ${o.service.summary} (${o.service.priceUsdc} USDC), delivered as ${o.service.deliverable ?? "svg"}, graded on: ${o.service.requirements.join("; ")}`,
         )
       : ["- nothing is on offer yet"];
 
@@ -107,6 +119,11 @@ function systemPrompt(agent: AgentRecord, offers: ServiceOffer[]): string {
     "offers, say so and tell them what is available rather than promising it:",
     "a job funded for work nobody sells is refunded at best.",
     "",
+    "Choose the agent whose service actually covers what is asked for, and give",
+    "its id in providerId. Cheapest is not the answer: an agent hired for work",
+    "it does not do will deliver the wrong thing and fail its own terms, and the",
+    "money is escrowed before any of that is known.",
+    "",
     "Ask for whatever is missing, one short question at a time. Set ready to",
     "true only once the provider would need to ask nothing further, and keep",
     "the request within what the offer covers — the evaluator grades against",
@@ -117,14 +134,15 @@ function systemPrompt(agent: AgentRecord, offers: ServiceOffer[]): string {
 
 /// One turn. The caller owns the history, so this stays stateless and a restart
 /// loses nothing.
+export interface ProviderOffer {
+  id: string;
+  service: ServiceOffer;
+}
+
 export async function chat(opts: {
   agent: AgentRecord;
   history: ChatMessage[];
-  offers: ServiceOffer[];
-  /// The requirements a brief is graded against, taken from the provider that
-  /// would be hired. Never model-generated: what is judged has to be what was
-  /// advertised.
-  requirements: string[];
+  offers: ProviderOffer[];
 }): Promise<ChatReply> {
   const transcript = opts.history
     .map((m) => `${m.role === "user" ? "User" : "Agent"}: ${m.content}`)
@@ -142,14 +160,27 @@ export async function chat(opts: {
         ready: true,
         request:
           "A poster for AgentRail Demo Day, subtitled 'Autonomous agents settling payments on chain', calling the reader to join us, in deep blue and amber.",
+        providerId: opts.offers[0]?.id ?? "",
       },
     },
     isRawReply,
   );
 
+  // The model names a provider; it does not get to invent one. An id that is
+  // not on offer falls back to the cheapest, which is the old behaviour and
+  // still better than failing the conversation.
+  const chosen =
+    opts.offers.find((o) => o.id === raw.providerId) ?? (raw.ready ? opts.offers[0] : undefined);
+
   return {
     message: raw.message,
     ready: raw.ready,
-    brief: raw.ready ? { request: raw.request, requirements: opts.requirements } : null,
+    providerId: raw.ready ? (chosen?.id ?? null) : null,
+    // The terms come from the chosen provider, never from the model. Showing a
+    // different provider's terms would ask the user to approve a commission
+    // under conditions that will not apply to it.
+    brief: raw.ready
+      ? { request: raw.request, requirements: chosen?.service.requirements ?? [] }
+      : null,
   };
 }

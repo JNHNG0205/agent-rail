@@ -287,8 +287,7 @@ export function startRuntime(): Promise<Server> {
         const reply = await chat({
           agent,
           history,
-          offers: candidates.map((p) => p.service!),
-          requirements: candidates[0]?.service?.requirements ?? [],
+          offers: candidates.map((p) => ({ id: p.id, service: p.service! })),
         });
         json(200, reply);
         return;
