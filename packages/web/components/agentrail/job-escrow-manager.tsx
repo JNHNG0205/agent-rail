@@ -1,14 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  ChevronDown,
-  FileSignature,
-  Fingerprint,
-  Hash,
-  Lock,
-} from 'lucide-react'
-import { type JobStep, formatUsdc, truncateHex } from '@/lib/agentrail-data'
+import { ChevronDown, FileSignature, Fingerprint, Lock } from 'lucide-react'
+import { type JobStep, formatUsdc } from '@/lib/agentrail-data'
 import { agentLabel } from '@agentrail/shared'
 import { useJobs } from '@/hooks/useJobs'
 import { JOB_STATE_LABELS } from '@agentrail/shared'
@@ -133,14 +127,9 @@ export function JobEscrowManager() {
           </span>
         </DetailRow>
 
-        <DetailRow
-          icon={<Hash className="size-4" aria-hidden="true" />}
-          label="Deliverable Hash (keccak256)"
-          mono
-          copyValue={job.deliverableHash ?? undefined}
-        >
-          {job.deliverableHash ? truncateHex(job.deliverableHash, 10, 8) : 'not submitted yet'}
-        </DetailRow>
+        {/* The keccak hash lives on the Escrow Jobs and Evaluator tabs, where
+            proving what was graded is the subject. Here it was a third copy on
+            the page someone opens to see how their own agents are doing. */}
 
         <DetailRow
           icon={<FileSignature className="size-4" aria-hidden="true" />}

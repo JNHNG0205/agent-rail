@@ -16,7 +16,7 @@ import {
   LogOut,
   ExternalLink,
 } from 'lucide-react'
-import { truncateHex, formatUsdc } from '@/lib/agentrail-data'
+import { truncateHex } from '@/lib/agentrail-data'
 import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
 import { useWalletStatus } from '@/hooks/useWalletStatus'
 import { cn } from '@/lib/utils'
@@ -169,16 +169,10 @@ export function TopNav({
                     </div>
 
                     <div className="space-y-1">
-                      {connectedAddress && (
-                      <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
-                        <span>USDC</span>
-                        <span className="font-medium text-foreground tabular-nums">
-                          {walletStatus.usdcBalance !== null
-                            ? formatUsdc(walletStatus.usdcBalance)
-                            : '—'}
-                        </span>
-                      </div>
-                      )}
+                      {/* No USDC row. Your wallet holds none by design — the
+                          agents hold their own and pay their own gas — so a
+                          balance here reads as funds at stake when none are.
+                          The line below says so instead. */}
 
                       <p className="px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
                         {!connectedAddress

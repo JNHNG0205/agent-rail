@@ -18,6 +18,7 @@ import {
   truncateHex,
 } from '@/lib/agentrail-data'
 import { useJobs } from '@/hooks/useJobs'
+import { useRegistry } from '@/hooks/useRegistry'
 import { JOB_STATE_LABELS, agentLabel } from '@agentrail/shared'
 import { ProgressTracker } from '@/components/agentrail/progress-tracker'
 import { CopyButton } from '@/components/agentrail/copy-button'
@@ -253,6 +254,13 @@ export function JobsView() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
   const [selected, setSelected] = useState<JobRow | null>(null)
   const { jobs: liveJobs } = useJobs()
+  // agentLabel only knows the seeded three; every agent a user created is just
+  // an address to it. The registry has the names people actually chose.
+  const { agents } = useRegistry()
+  const nameOf = useMemo(() => {
+    const byAddress = new Map(agents.map((a) => [a.address.toLowerCase(), a.name]))
+    return (address: string) => byAddress.get(address.toLowerCase()) ?? agentLabel(address as `0x${string}`)
+  }, [agents])
 
   const allJobsList: JobRow[] = liveJobs.length > 0
     ? liveJobs.map((j) => {
@@ -264,8 +272,8 @@ export function JobsView() {
           client: j.client,
           provider: j.provider,
           evaluator: j.evaluator,
-          buyer: agentLabel(j.client),
-          worker: agentLabel(j.provider),
+          buyer: nameOf(j.client),
+          worker: nameOf(j.provider),
           amount: j.amount,
           escrowAmount: j.amount,
           status: stateLabel,

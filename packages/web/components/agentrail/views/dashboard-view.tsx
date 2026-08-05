@@ -113,7 +113,7 @@ export function DashboardView() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {mine.map((agent) => (
-              <AgentCard key={agent.address} agent={agent} />
+              <AgentCard key={agent.address} agent={agent} showIdentity={false} />
             ))}
           </div>
         )}

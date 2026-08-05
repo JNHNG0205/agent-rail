@@ -32,7 +32,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /// Reputation is ReputationRegistry's completed-job count, read from the chain.
 /// There is no star rating, attestation count or specialty, because nothing
 /// records them — every number here has a source behind it.
-export function AgentCard({ agent }: { agent: Agent }) {
+export function AgentCard({
+  agent,
+  showIdentity = true,
+}: {
+  agent: Agent
+  /// The identity token id and the agent's address. True in the registry, where
+  /// on-chain identity is the subject; false on someone's own dashboard, which
+  /// answers "what do I have and what is it doing" — nobody sends funds to an
+  /// agent by hand, so an address there is a number to scroll past.
+  showIdentity?: boolean
+}) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-3">
@@ -52,7 +62,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
             </span>
           </div>
         </div>
-        {agent.tokenId !== undefined && (
+        {showIdentity && agent.tokenId !== undefined && (
           <div className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-2.5 py-1.5">
             <BadgeCheck className="size-4 text-primary" aria-hidden="true" />
             <span className="font-mono text-xs text-foreground">#{agent.tokenId}</span>
@@ -83,6 +93,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
         </div>
       )}
 
+      {showIdentity && (
       <div className="mt-4 border-t border-border pt-4">
         <Field label="Wallet Address">
           <div className="flex items-center gap-2">
@@ -93,6 +104,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
           </div>
         </Field>
       </div>
+      )}
     </article>
   )
 }
