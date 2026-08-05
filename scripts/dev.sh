@@ -25,15 +25,10 @@ case "$TARGET" in
     ;;
   base-sepolia)
     export CHAIN_ID=84532
-    # The agents need the private endpoint: they send transactions, and a
-    # load-balanced pool answers nonce reads from nodes that have not applied the
-    # previous block. Only the root .env carries it, so lift it into the
-    # environment for them.
-    #
-    # The indexer deliberately does not use it — see ponder.config.ts. Its
-    # workload is bulk eth_getLogs, and the free tier caps that at a 10 block
-    # range where the public endpoint serves 1000. It reads
-    # BASE_SEPOLIA_INDEXER_RPC_URL instead, so exporting this does not reach it.
+    # Only the root .env carries the endpoint, so lift it into the environment
+    # for the processes started below. The indexer reads its own variable and so
+    # is unaffected — see ponder.config.ts for why that separation is kept even
+    # though one provider currently serves everything.
     if [ -z "${BASE_SEPOLIA_RPC_URL:-}" ] && [ -f .env ]; then
       BASE_SEPOLIA_RPC_URL="$(grep -E '^BASE_SEPOLIA_RPC_URL=.' .env | head -1 | cut -d= -f2- || true)"
     fi
@@ -142,29 +137,38 @@ if ! kill -0 "$indexer_pid" 2>/dev/null; then
   exit 1
 fi
 
-# 6. Start Agent B (402 server + chain listener)
-echo "[dev] starting agent-b…"
-npm run agent:b &
-pids+=($!)
+# 6. Start the agent runtime, and confirm it stayed up.
+#
+#    This hosts every agent a user creates and serves the directory they find
+#    each other through. The whole UI goes through it — the assistant, the chat,
+#    hiring, the registry — so without it those screens answer 503 while the rest
+#    of the stack looks healthy. It used to be missing here entirely, which meant
+#    the one command anyone would run did not start the product.
+#
+#    It also creates the default client agent on first run, which costs a few
+#    on-chain calls, so it gets longer than the indexer to come up.
+echo "[dev] starting agent runtime…"
+npm run runtime &
+runtime_pid=$!
+pids+=($runtime_pid)
+
+sleep 12
+if ! kill -0 "$runtime_pid" 2>/dev/null; then
+  echo "[dev] the agent runtime exited during startup — the assistant and registry would be dead." >&2
+  echo "[dev] run 'npm run runtime' on its own to see why." >&2
+  exit 1
+fi
 
 # 7. Start Agent C (evaluator)
+#
+#    Not hosted by the runtime, deliberately. A referee that a party to the trade
+#    could create would be no referee, so it runs on its own key and its own
+#    process.
 echo "[dev] starting agent-c…"
 npm run agent:c &
 pids+=($!)
 
 # 8. Start the frontend (foreground — Ctrl-C stops everything)
 echo "[dev] starting web…"
-
-# Name the matching command explicitly. The agents resolve their chain from
-# packages/agents/.env when started by hand, so a plain `npm run agent:a` next to
-# a testnet stack talks to 127.0.0.1:8545 and fails on a refused connection —
-# after it has already fetched the 402 quote, which makes it look like a chain
-# problem rather than the wrong chain.
-if [ "$TARGET" = "local" ]; then
-  hire_command="npm run agent:a"
-else
-  hire_command="npm run agent:a:base-sepolia"
-fi
-
-echo "[dev] ready on ${TARGET}. Run '${hire_command}' in another terminal to commission a job."
+echo "[dev] ready on ${TARGET} — open http://localhost:3000 and talk to your assistant."
 npm run web
