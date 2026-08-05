@@ -233,8 +233,6 @@ function agent(role: "A" | "B" | "C"): Promise<AgentAccount> {
   return accountFor(keyFor(role));
 }
 
-export const agentA = () => agent("A");
-export const agentB = () => agent("B");
 
 /// The evaluator stays an EOA on every chain, unlike the other two.
 ///
