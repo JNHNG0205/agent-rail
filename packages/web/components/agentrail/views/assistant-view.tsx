@@ -127,10 +127,10 @@ export function AssistantView() {
               Ready to commission
             </p>
             <p className="mt-1.5 text-sm">
-              <span className="font-medium">{brief.title}</span> — {brief.subtitle}
+              <span className="font-medium">{brief.request}</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              {brief.callToAction} · {brief.palette}
+              Graded on: {brief.requirements.join(" · ")}
             </p>
             <Button className="mt-3" onClick={() => void hire()} disabled={hiring || providers.length === 0}>
               {hiring ? (
@@ -162,7 +162,7 @@ export function AssistantView() {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="I need a poster for our demo day…"
+            placeholder="Tell your agent what you need…"
             disabled={!client || thinking}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring"
           />
@@ -199,13 +199,20 @@ export function AssistantView() {
                   ) : null}
                   Delivered — hash verified against the chain
                 </p>
-                {/* Sandboxed: the SVG is untrusted output from another agent, and
-                    the route serves it with a locked-down CSP. */}
+                {/* Sandboxed: the deliverable is untrusted output from another
+                    agent, and the route serves it with a locked-down CSP. An
+                    iframe suits every kind — the route sets the content type, so
+                    the browser renders a drawing as one and a document as text. */}
                 <iframe
                   src={result.deliverableUrl}
                   title={`Deliverable for job ${job.jobId}`}
                   sandbox=""
-                  className="aspect-[3/4] w-full rounded-xl border border-border bg-white"
+                  className={cn(
+                    "w-full rounded-xl border border-border bg-white",
+                    // A poster is portrait; a document is not, and forcing one
+                    // into that shape wastes most of the frame on white space.
+                    job.kind === "svg" ? "aspect-[3/4]" : "h-80",
+                  )}
                 />
               </div>
             )}

@@ -4,7 +4,7 @@ import {
   JobContractAbi,
   MockUSDCAbi,
   formatUsdc,
-  type PosterBrief,
+  type JobBrief,
 } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
 import { accountOf, getAgent, listAgents, type AgentRecord } from "./store.js";
@@ -49,7 +49,7 @@ export async function hire(opts: {
   clientId: string;
   providerId: string;
   evaluator: `0x${string}`;
-  brief: PosterBrief;
+  brief: JobBrief;
 }): Promise<HireResult> {
   const clientRecord = await getAgent(opts.clientId);
   if (!clientRecord) throw new Error(`no agent "${opts.clientId}"`);
@@ -61,7 +61,7 @@ export async function hire(opts: {
   if (!provider?.service) throw new Error(`no provider "${opts.providerId}"`);
 
   const amount = BigInt(Math.round(Number(provider.service.priceUsdc) * 1e6));
-  const brief: PosterBrief = { ...opts.brief, requirements: provider.service.requirements };
+  const brief: JobBrief = { ...opts.brief, requirements: provider.service.requirements };
 
   const client = await accountOf(clientRecord);
 

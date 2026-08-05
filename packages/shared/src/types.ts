@@ -102,13 +102,30 @@ export interface ContractAddresses {
 
 export type ContractName = keyof ContractAddresses;
 
-/// Poster commission terms. Travels inside Agent B's 402 quote, so it must live
-/// in shared — it crosses the HTTP boundary between agents.
-export interface PosterBrief {
-  title: string;
-  subtitle: string;
-  callToAction: string;
-  palette: string;
+/// What a provider hands back — and therefore how it is validated, judged and
+/// shown. Declared by the provider when it is created, because the client cannot
+/// know what a stranger's agent produces and the browser has to render it.
+export type DeliverableKind = "svg" | "markdown" | "text";
+
+export const DELIVERABLE_KINDS: readonly DeliverableKind[] = ["svg", "markdown", "text"];
+
+export function isDeliverableKind(value: unknown): value is DeliverableKind {
+  return typeof value === "string" && (DELIVERABLE_KINDS as readonly string[]).includes(value);
+}
+
+/// Commission terms. Crosses the HTTP boundary between agents, so it lives here.
+///
+/// Deliberately free-form. An earlier version fixed the fields a poster needs —
+/// title, subtitle, call to action, palette — which quietly made the whole
+/// marketplace a poster marketplace: an agent selling anything else had no way
+/// to be asked for it. `request` is the user's own words.
+///
+/// `requirements` are the provider's published terms, copied verbatim rather
+/// than written by the hiring agent. That is what stops what is judged from
+/// drifting from what was advertised — the client cannot soften the terms it
+/// will be graded against, and the provider cannot deny the ones it published.
+export interface JobBrief {
+  request: string;
   requirements: string[];
 }
 

@@ -1,17 +1,24 @@
-import type { PosterBrief } from "@agentrail/shared";
+import type { JobBrief } from "@agentrail/shared";
 import { completeJson, type JsonSchema } from "../lib/llm.js";
 import type { AgentRecord } from "./store.js";
 import type { ServiceOffer } from "./store.js";
 
 /// Talking to your own agent, until it knows enough to commission work.
 ///
-/// This is the step between "I want a poster" and a job on chain. The agent asks
-/// for whatever is missing and, once it has enough, returns a brief ready to
-/// hire against.
+/// This is the step between what a person asks for and a job on chain. The agent
+/// asks for whatever is missing and, once it has enough, returns a brief ready
+/// to hire against.
 ///
 /// It runs here rather than in the browser because the model key must not reach
 /// a client, and because the agent doing the talking is the same one that will
 /// spend the money — the conversation and the commission belong together.
+///
+/// What can be commissioned is whatever is on offer, read from the directory at
+/// the time of the conversation. The agent is deliberately not told what kind of
+/// work exists: this asked for a poster's title, subtitle, call to action and
+/// palette until recently, which quietly made the whole marketplace a poster
+/// marketplace — an agent selling anything else could never be hired through
+/// here, however it described itself.
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -22,16 +29,13 @@ export interface ChatReply {
   message: string;
   /// True once enough is known to hire. The caller decides whether to act on it.
   ready: boolean;
-  brief: PosterBrief | null;
+  brief: JobBrief | null;
 }
 
 interface RawReply {
   message: string;
   ready: boolean;
-  title: string;
-  subtitle: string;
-  callToAction: string;
-  palette: string;
+  request: string;
 }
 
 const REPLY_SCHEMA = {
@@ -43,18 +47,16 @@ const REPLY_SCHEMA = {
     },
     ready: {
       type: "boolean",
-      description: "True only when title, subtitle, call to action and palette are all known.",
+      description:
+        "True only when the provider could produce the right thing from the request below without asking anything further.",
     },
-    title: { type: "string", description: "Poster headline. Empty string until known." },
-    subtitle: { type: "string", description: "Supporting line. Empty string until known." },
-    callToAction: { type: "string", description: "What the reader should do. Empty until known." },
-    palette: {
+    request: {
       type: "string",
       description:
-        "Exactly two colours, e.g. 'deep blue and amber'. More than two and the poster will miss one.",
+        "The complete request in your own words, including every detail the user gave. Empty string until ready. This is all the provider is told, so anything missing here is missing from the work.",
     },
   },
-  required: ["message", "ready", "title", "subtitle", "callToAction", "palette"],
+  required: ["message", "ready", "request"],
   additionalProperties: false,
 } as const satisfies JsonSchema;
 
@@ -62,12 +64,7 @@ function isRawReply(value: unknown): value is RawReply {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.message === "string" &&
-    typeof v.ready === "boolean" &&
-    typeof v.title === "string" &&
-    typeof v.subtitle === "string" &&
-    typeof v.callToAction === "string" &&
-    typeof v.palette === "string"
+    typeof v.message === "string" && typeof v.ready === "boolean" && typeof v.request === "string"
   );
 }
 
@@ -91,7 +88,10 @@ export function isChatHistory(value: unknown): value is ChatMessage[] {
 function systemPrompt(agent: AgentRecord, offers: ServiceOffer[]): string {
   const market =
     offers.length > 0
-      ? offers.map((o) => `- ${o.summary} (${o.priceUsdc} USDC), graded on: ${o.requirements.join("; ")}`)
+      ? offers.map(
+          (o) =>
+            `- ${o.summary} (${o.priceUsdc} USDC), delivered as ${o.deliverable ?? "svg"}, graded on: ${o.requirements.join("; ")}`,
+        )
       : ["- nothing is on offer yet"];
 
   return [
@@ -103,10 +103,15 @@ function systemPrompt(agent: AgentRecord, offers: ServiceOffer[]): string {
     "Available from other agents right now:",
     ...market,
     "",
-    "Ask for whatever is missing, one short question at a time. Set ready to true",
-    "only once title, subtitle, call to action and palette are all known.",
-    "Name exactly two colours: the evaluator rejects a poster that misses any",
-    "colour the brief asks for, so a longer list makes rejection near certain.",
+    "Only these can be commissioned. If someone asks for something no agent",
+    "offers, say so and tell them what is available rather than promising it:",
+    "a job funded for work nobody sells is refunded at best.",
+    "",
+    "Ask for whatever is missing, one short question at a time. Set ready to",
+    "true only once the provider would need to ask nothing further, and keep",
+    "the request within what the offer covers — the evaluator grades against",
+    "the published terms, so anything promised beyond them will not be graded",
+    "and may simply not be done.",
   ].join("\n");
 }
 
@@ -133,12 +138,10 @@ export async function chat(opts: {
       schemaName: "agent_reply",
       schema: REPLY_SCHEMA,
       mock: {
-        message: "Got it — a demo day poster in deep blue and amber. Ready to commission.",
+        message: "Got it — ready to commission that.",
         ready: true,
-        title: "AgentRail Demo Day",
-        subtitle: "Autonomous agents settling payments on chain",
-        callToAction: "Join us",
-        palette: "deep blue and amber",
+        request:
+          "A poster for AgentRail Demo Day, subtitled 'Autonomous agents settling payments on chain', calling the reader to join us, in deep blue and amber.",
       },
     },
     isRawReply,
@@ -147,14 +150,6 @@ export async function chat(opts: {
   return {
     message: raw.message,
     ready: raw.ready,
-    brief: raw.ready
-      ? {
-          title: raw.title,
-          subtitle: raw.subtitle,
-          callToAction: raw.callToAction,
-          palette: raw.palette,
-          requirements: opts.requirements,
-        }
-      : null,
+    brief: raw.ready ? { request: raw.request, requirements: opts.requirements } : null,
   };
 }

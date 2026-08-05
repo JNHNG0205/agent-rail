@@ -1,5 +1,5 @@
 import { createServer, type Server, type IncomingMessage } from "node:http";
-import type { PosterBrief } from "@agentrail/shared";
+import { isDeliverableKind, type JobBrief } from "@agentrail/shared";
 import { addresses } from "@agentrail/shared";
 import {
   listAgents,
@@ -48,15 +48,15 @@ import { accountOf } from "./store.js";
 /// Work in flight, keyed by "agentId:jobId" so two agents cannot collide on a
 /// job number. In memory only: the chain holds the authoritative deliverable
 /// hash, and a restart losing the content is recoverable through the timeout.
-const commissions = new Map<string, PosterBrief>();
+const commissions = new Map<string, JobBrief>();
 const deliverables = new Map<string, string>();
 
 const workKey = (agentId: string, jobId: bigint) => `${agentId}:${jobId}`;
 
-export function rememberCommission(agentId: string, jobId: bigint, brief: PosterBrief): void {
+export function rememberCommission(agentId: string, jobId: bigint, brief: JobBrief): void {
   commissions.set(workKey(agentId, jobId), brief);
 }
-export function getCommission(agentId: string, jobId: bigint): PosterBrief | undefined {
+export function getCommission(agentId: string, jobId: bigint): JobBrief | undefined {
   return commissions.get(workKey(agentId, jobId));
 }
 export function rememberDeliverable(agentId: string, jobId: bigint, svg: string): void {
@@ -77,16 +77,18 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-export function isPosterBrief(value: unknown): value is PosterBrief {
+/// A brief must name what is wanted. The requirements are filled in from the
+/// provider's published terms, so they are not required here — but an empty
+/// request is, because it is all the provider is told.
+export function isJobBrief(value: unknown): value is JobBrief {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.title === "string" &&
-    typeof v.subtitle === "string" &&
-    typeof v.callToAction === "string" &&
-    typeof v.palette === "string" &&
-    Array.isArray(v.requirements) &&
-    v.requirements.every((r) => typeof r === "string")
+    typeof v.request === "string" &&
+    v.request.trim().length > 0 &&
+    v.request.length <= 4_000 &&
+    (v.requirements === undefined ||
+      (Array.isArray(v.requirements) && v.requirements.every((r) => typeof r === "string")))
   );
 }
 
@@ -98,6 +100,10 @@ export function isServiceOffer(value: unknown): value is ServiceOffer {
     v.summary.length > 0 &&
     typeof v.priceUsdc === "string" &&
     /^\d+(\.\d+)?$/.test(v.priceUsdc) &&
+    // Absent means svg: that is what every agent created before deliverable
+    // kinds existed produces, and rejecting them would strand soulbound
+    // identities that cannot be minted again.
+    (v.deliverable === undefined || isDeliverableKind(v.deliverable)) &&
     Array.isArray(v.requirements) &&
     v.requirements.length > 0 &&
     v.requirements.every((r) => typeof r === "string")
@@ -302,7 +308,7 @@ export function startRuntime(): Promise<Server> {
 
         const body: unknown = JSON.parse(await readBody(req));
         const b = body as { brief?: unknown; providerId?: unknown };
-        if (!isPosterBrief(b.brief)) {
+        if (!isJobBrief(b.brief)) {
           json(400, { error: "brief is malformed" });
           return;
         }
@@ -375,7 +381,7 @@ export function startRuntime(): Promise<Server> {
           json(400, { error: "jobId must be a decimal string" });
           return;
         }
-        if (!isPosterBrief(b.brief)) {
+        if (!isJobBrief(b.brief)) {
           json(400, { error: "brief is malformed" });
           return;
         }

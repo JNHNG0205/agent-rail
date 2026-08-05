@@ -6,7 +6,14 @@
 // ESM loader (via cjs-module-lexer) can't see named exports re-exported
 // through this file and every named import from "@agentrail/shared" fails
 // at runtime with "does not provide an export named ...".
-export { JobState, JOB_STATE_LABELS, JOB_STATE_BY_LABEL, toJob } from "./src/types";
+export {
+  JobState,
+  JOB_STATE_LABELS,
+  JOB_STATE_BY_LABEL,
+  toJob,
+  DELIVERABLE_KINDS,
+  isDeliverableKind,
+} from "./src/types";
 export type {
   Agent,
   Job,
@@ -15,7 +22,8 @@ export type {
   JobOutcome,
   ContractAddresses,
   ContractName,
-  PosterBrief,
+  JobBrief,
+  DeliverableKind,
   DeliverableReview,
   ChainEvent,
 } from "./src/types";

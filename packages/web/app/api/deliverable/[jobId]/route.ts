@@ -3,7 +3,7 @@ import { query } from "@/lib/db";
 import { runtimeUrl } from "@/lib/runtime";
 import { checkDeliverable } from "@/lib/deliverable";
 
-/// GET /api/deliverable/:jobId — the finished work, as SVG. Member 4.
+/// GET /api/deliverable/:jobId — the finished work. Member 4.
 ///
 /// The provider serves the deliverable, not the chain, which only holds its
 /// keccak256 hash. So this finds who produced the job, asks that agent for the
@@ -20,7 +20,18 @@ interface ProviderRow {
 interface DirectoryEntry {
   id: string;
   address: string;
+  service: { deliverable?: string } | null;
 }
+
+/// How the bytes are served depends on what the provider said it produces.
+/// Serving Markdown as image/svg+xml would simply fail to render, and guessing
+/// from the content would mean sniffing provider-supplied bytes to decide how to
+/// treat them — which is the thing nosniff exists to prevent.
+const CONTENT_TYPES: Record<string, string> = {
+  svg: "image/svg+xml",
+  markdown: "text/markdown; charset=utf-8",
+  text: "text/plain; charset=utf-8",
+};
 
 export async function GET(
   _request: Request,
@@ -73,12 +84,14 @@ export async function GET(
       const { ok: _ok, status, ...body } = check;
       return NextResponse.json(body, { status });
     }
-    const svg = check.svg;
+    const kind = agent.service?.deliverable ?? "svg";
 
-    return new NextResponse(svg, {
+    return new NextResponse(check.content, {
       status: 200,
       headers: {
-        "content-type": "image/svg+xml",
+        "content-type": CONTENT_TYPES[kind] ?? CONTENT_TYPES.svg!,
+        // So the browser can decide how to show it without sniffing the bytes.
+        "x-deliverable-kind": kind,
         // Untrusted provider output. Served as a document rather than inline
         // markup so a script inside it cannot run against this origin.
         "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",

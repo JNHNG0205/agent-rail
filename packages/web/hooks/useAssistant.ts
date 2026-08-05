@@ -14,26 +14,36 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface PosterBrief {
-  title: string;
-  subtitle: string;
-  callToAction: string;
-  palette: string;
+/// What the assistant commissions. Free-form: an earlier version fixed the
+/// fields a poster needs, which made every agent in the marketplace a poster
+/// designer regardless of what it advertised.
+export interface JobBrief {
+  request: string;
   requirements: string[];
 }
+
+export type DeliverableKind = "svg" | "markdown" | "text";
 
 export interface RuntimeAgent {
   id: string;
   name: string;
   role: "client" | "provider";
   address: `0x${string}`;
-  service: { summary: string; priceUsdc: string; requirements: string[] } | null;
+  service: {
+    summary: string;
+    priceUsdc: string;
+    deliverable?: DeliverableKind;
+    requirements: string[];
+  } | null;
 }
 
 export interface HiredJob {
   jobId: string;
   providerName: string;
   amountUsdc: string;
+  /// Carried from the provider that was hired, so the view knows whether to
+  /// render the result as an image or as text without asking again.
+  kind: DeliverableKind;
 }
 
 const GREETING: ChatMessage = {
@@ -47,7 +57,7 @@ export function useAssistant() {
   const [agents, setAgents] = useState<RuntimeAgent[]>([]);
   const [client, setClient] = useState<RuntimeAgent | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
-  const [brief, setBrief] = useState<PosterBrief | null>(null);
+  const [brief, setBrief] = useState<JobBrief | null>(null);
   const [thinking, setThinking] = useState(false);
   const [hiring, setHiring] = useState(false);
   const [job, setJob] = useState<HiredJob | null>(null);
@@ -116,7 +126,7 @@ export function useAssistant() {
           body: JSON.stringify({ messages: next }),
         });
         const body = (await res.json()) as
-          | { message: string; ready: boolean; brief: PosterBrief | null }
+          | { message: string; ready: boolean; brief: JobBrief | null }
           | { error: string };
 
         if ("error" in body) throw new Error(body.error);
@@ -145,7 +155,11 @@ export function useAssistant() {
         body: JSON.stringify({ brief }),
       });
       const body = (await res.json()) as
-        | { jobId: string; provider: { name: string }; amount: string }
+        | {
+            jobId: string;
+            provider: { name: string; service: { deliverable?: DeliverableKind } | null };
+            amount: string;
+          }
         | { error: string };
 
       if ("error" in body) throw new Error(body.error);
@@ -156,6 +170,7 @@ export function useAssistant() {
         // Minor units to a display string. Never through Number first: money is
         // integer arithmetic.
         amountUsdc: (BigInt(body.amount) / 1_000_000n).toString(),
+        kind: body.provider.service?.deliverable ?? "svg",
       });
       setMessages((prev) => [
         ...prev,

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generatePrivateKey } from "viem/accounts";
 import type { Hex } from "viem";
-import { CHAIN_ID } from "@agentrail/shared";
+import { CHAIN_ID, type DeliverableKind } from "@agentrail/shared";
 import { accountFor, type AgentAccount } from "../lib/wallet.js";
 import { query } from "./db.js";
 
@@ -14,9 +14,19 @@ import { query } from "./db.js";
 /// unregistered on whichever one is running.
 
 export interface ServiceOffer {
-  /// What the agent sells, in its own words — what a hiring agent reads.
+  /// What the agent sells, in its own words — what a hiring agent reads, and
+  /// what tells the provider itself what it is for when it comes to do the work.
   summary: string;
   priceUsdc: string;
+  /// The form the work takes. Declared rather than inferred: the evaluator and
+  /// the browser both have to know what they are looking at, and a client
+  /// cannot know what a stranger's agent produces.
+  ///
+  /// Optional because rows written before this existed genuinely lack it — the
+  /// service is stored as JSON, so an older agent has no such key. Absent means
+  /// svg, which is what those agents produce. Declaring it required would make
+  /// the type lie about what comes back from the database.
+  deliverable?: DeliverableKind;
   /// The terms the evaluator grades against. Published, so a client adopts them
   /// verbatim and what was sold cannot drift from what is judged.
   requirements: string[];

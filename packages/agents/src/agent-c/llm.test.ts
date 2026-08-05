@@ -1,16 +1,13 @@
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import type { PosterBrief } from "@agentrail/shared";
+import type { JobBrief } from "@agentrail/shared";
 import { reviewDeliverable, isDeliverableReview } from "./llm.js";
 
 const realFetch = globalThis.fetch;
 
-const BRIEF: PosterBrief = {
-  title: "AgentRail Demo Day",
-  subtitle: "Autonomous agent settlement",
-  callToAction: "Join us",
-  palette: "warm terracotta on cream",
-  requirements: ["shows the title"],
+const BRIEF: JobBrief = {
+  request: "A poster for AgentRail Demo Day in warm terracotta on cream, calling the reader to join us",
+  requirements: ["shows the title", "shows the call to action"],
 };
 
 beforeEach(() => {

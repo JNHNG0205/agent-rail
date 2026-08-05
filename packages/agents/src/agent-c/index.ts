@@ -3,7 +3,7 @@ import {
   addresses,
   JobContractAbi,
   agentLabel,
-  type PosterBrief,
+  type JobBrief,
 } from "@agentrail/shared";
 import { publicClient, agentC } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
@@ -25,13 +25,19 @@ interface Endpoints {
 /// work. That separation is the point: a client that grades its own job has no
 /// answer to "what stops it refusing to pay?".
 
-function isPosterBrief(value: unknown): value is PosterBrief {
+/// The brief arrives over HTTP from the provider being graded, so it is checked
+/// rather than trusted. Requirements must be present and non-empty: an empty
+/// list would be graded as "nothing was asked for", which every deliverable
+/// satisfies — turning the evaluation into an automatic approval.
+function isJobBrief(value: unknown): value is JobBrief {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.title === "string" &&
+    typeof v.request === "string" &&
+    v.request.length > 0 &&
     Array.isArray(v.requirements) &&
-    v.requirements.every((r) => typeof r === "string")
+    v.requirements.length > 0 &&
+    v.requirements.every((r) => typeof r === "string" && r.length > 0)
   );
 }
 
@@ -62,7 +68,7 @@ async function handleSubmission(jobId: bigint, endpoints: Endpoints): Promise<vo
     return;
   }
   const brief: unknown = await briefRes.json();
-  if (!isPosterBrief(brief)) {
+  if (!isJobBrief(brief)) {
     console.error(`[agent-c] job ${jobId}: provider served a malformed brief`);
     return;
   }

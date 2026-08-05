@@ -12,7 +12,7 @@ const HASH = keccak256(toBytes(SVG));
 test("accepts bytes matching the hash committed on chain", () => {
   const result = checkDeliverable({ jobId: "1", onChainHash: HASH, served: SVG });
   assert.equal(result.ok, true);
-  assert.equal(result.ok && result.svg, SVG);
+  assert.equal(result.ok && result.content, SVG);
 });
 
 test("refuses bytes that do not hash to what was committed", () => {

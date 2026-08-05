@@ -20,6 +20,10 @@ import { useAuthedFetch } from "@/lib/session";
 interface ServiceOffer {
   summary: string;
   priceUsdc: string;
+  /// The form the work takes, proposed from the purpose. Shown before creation
+  /// because it decides what the agent will be asked to produce for every job
+  /// it ever takes, and a registration cannot be undone.
+  deliverable: "svg" | "markdown" | "text";
   requirements: string[];
 }
 
@@ -167,6 +171,9 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
                   Proposed service
                 </p>
                 <p className="mt-1.5 text-sm">{offer.summary}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Delivered as {offer.deliverable}
+                </p>
 
                 <label className="mt-3 block">
                   <span className="mb-1 block text-xs text-muted-foreground">Price (USDC)</span>

@@ -3,7 +3,7 @@ import { addresses, JobContractAbi, formatUsdc } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
 import { hashDeliverable } from "../lib/hash.js";
-import { runTask } from "../provider/poster.js";
+import { runTask } from "../provider/task.js";
 import { listAgents, accountOf, type AgentRecord } from "./store.js";
 import { getCommission, rememberDeliverable } from "./server.js";
 
@@ -52,10 +52,15 @@ export function startProviderWorker(): () => void {
           }
 
           console.log(
-            `[runtime] ${agent.name}: job ${jobId} funded (${formatUsdc(job.amount)} USDC) — designing "${brief.title}"`,
+            `[runtime] ${agent.name}: job ${jobId} funded (${formatUsdc(job.amount)} USDC) — working on "${brief.request.slice(0, 60)}"`,
           );
 
-          const svg = await runTask(brief);
+          // The provider's own published summary is what tells it what it sells.
+          const svg = await runTask({
+            kind: agent.service?.deliverable ?? "svg",
+            service: agent.service?.summary ?? "a delivered piece of work",
+            brief,
+          });
           const deliverableHash = hashDeliverable(svg);
 
           // Serve it before committing the hash, so the evaluator can never see

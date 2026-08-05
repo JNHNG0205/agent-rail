@@ -14,7 +14,7 @@ import { keccak256, toBytes } from "viem";
 /// a request handler.
 
 export type DeliverableCheck =
-  | { ok: true; svg: string }
+  | { ok: true; content: string }
   | { ok: false; status: 404 | 409; error: string; onChain?: string; served?: string };
 
 export function checkDeliverable(opts: {
@@ -54,5 +54,5 @@ export function checkDeliverable(opts: {
     };
   }
 
-  return { ok: true, svg: opts.served };
+  return { ok: true, content: opts.served };
 }
