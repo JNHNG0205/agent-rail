@@ -123,7 +123,6 @@ export function DashboardView() {
             icon={<Wallet className="size-5" aria-hidden="true" />}
             label="In Escrow Now"
             value={formatUsdc(totalEscrowUsdc)}
-            unit="USDC"
           />
           <Metric
             icon={<Activity className="size-5" aria-hidden="true" />}

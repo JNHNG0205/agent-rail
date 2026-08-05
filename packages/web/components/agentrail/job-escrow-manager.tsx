@@ -120,10 +120,7 @@ export function JobEscrowManager() {
           label="Escrow Amount"
         >
           <span className="font-mono font-semibold">
-            {formatUsdc(job.escrowAmount)}{' '}
-            <span className="text-xs font-normal text-muted-foreground">
-              USDC
-            </span>
+            {formatUsdc(job.escrowAmount)}
           </span>
         </DetailRow>
 

@@ -407,10 +407,7 @@ export function JobsView() {
             </p>
             <div className="mt-2 flex items-center justify-between">
               <span className="font-mono text-sm font-semibold text-foreground">
-                {formatUsdc(job.amount)}{' '}
-                <span className="text-xs font-normal text-muted-foreground">
-                  USDC
-                </span>
+                {formatUsdc(job.amount)}
               </span>
               <span className="text-xs text-muted-foreground">
                 {job.createdAt}
