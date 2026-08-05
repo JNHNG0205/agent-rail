@@ -31,19 +31,17 @@ const CANDIDATES = [
   {
     name: "baseSepolia",
     id: BASE_SEPOLIA_CHAIN_ID,
-    // Deliberately NOT BASE_SEPOLIA_RPC_URL, which the agents use.
+    // The limit that decides this is the eth_getLogs block range, because a
+    // backfill is thousands of those calls and nothing else. Measured on Base
+    // Sepolia: Alchemy's free tier caps a range at 10 blocks, the public
+    // endpoint at 1000, Infura at 10,000. Over a 200k-block history that is
+    // 20,000 requests, 200, or 20 — and the 20,000 exhaust the free tier's
+    // compute units per second, so the backfill stalls part-way with 429s and
+    // never finishes.
     //
-    // The indexer's workload is the opposite of theirs. Agents send a handful of
-    // transactions and need a node that answers consistently, so a private
-    // endpoint is right for them. The indexer reads logs in bulk, and there the
-    // limit that matters is the eth_getLogs block range: Alchemy's free tier
-    // caps it at 10 blocks, while the public endpoint serves 1000. Over a
-    // 200k-block history that is 20,000 requests against 200 — and the 20,000
-    // exceed the free tier's compute units per second, so the backfill stalls
-    // part-way with 429s and never finishes.
-    //
-    // Set BASE_SEPOLIA_INDEXER_RPC_URL to override, which is worth doing on a
-    // paid plan where the range cap is lifted.
+    // Kept as its own variable even though one endpoint now serves everything:
+    // the indexer and the agents want different things from a provider, and
+    // when that diverges again this is where it gets fixed.
     rpc: process.env.BASE_SEPOLIA_INDEXER_RPC_URL ?? BASE_SEPOLIA_RPC_URL,
     disableCache: false,
   },
