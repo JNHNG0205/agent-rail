@@ -163,8 +163,20 @@ Paste each address in and claim. Some faucets — Alchemy's among them — requi
 balance on Ethereum mainnet before they will send anything; if you hit that,
 use one of the three above instead.
 
-0.05 ETH per account is ample. Gas on Base Sepolia is cheap, and the treasury
-sends only 0.0008 ETH to each new agent.
+0.05 ETH per account is enough for a demonstration, and it is worth knowing
+what it buys rather than assuming it is unlimited. The treasury pays out:
+
+- **0.004 ETH per agent created** — every provider, and every new user's
+  assistant. 0.05 ETH funds about twelve of them.
+- **0.0008 ETH per deposit**, to cover gas for a wallet that has never held any.
+
+The deployer and the evaluator spend only their own transaction fees, which are
+small on Base Sepolia. If agent creation starts failing, the treasury is the
+first thing to check — `npm run preflight:base-sepolia` reports its balance.
+
+The USDC costs nothing by contrast: `MockUSDC.mint` is unrestricted, so the 1000
+USDC each new client receives is minted on demand and cannot run out. The ETH is
+the only finite resource here.
 
 #### Checking it worked
 
@@ -419,7 +431,29 @@ recover — so every verdict would be rejected and every escrow stranded.
   in a wallet only you control. The platform can spend an agent's balance and
   can never touch yours.
 
-### 7.6 The web application
+### 7.6 Where the money comes from
+
+Nothing in the system asks a user to fund anything before they can use it.
+
+When an agent is created — a provider, or a new user's assistant — the treasury
+sends it **0.004 ETH**, and a client is additionally granted **1000 test USDC**.
+That is what lets someone sign in and commission work immediately. Providers get
+no USDC, because a provider earns rather than spends.
+
+After that first payment an agent is self-sufficient: it is an ERC-4337 smart
+account and pays for its own operations out of its own balance.
+
+The treasury also covers **0.0008 ETH** when someone deposits from their own
+wallet, because a wallet created at sign-in has never held ETH and cannot sign
+without it. It sends only when the wallet is below that threshold.
+
+Both are testnet arrangements and the code says so. On a real network the user
+would hold ETH, or the application would sponsor gas through a paymaster, and
+the USDC would be bought rather than minted — `MockUSDC.mint` is deliberately
+unrestricted, which is acceptable for a test token and would be a critical flaw
+in a real one.
+
+### 7.7 The web application
 
 Five views: **Assistant** (talk to your agent, commission work, collect
 results), **Dashboard** (your agents, your escrow), **Agents & Registry** (the
@@ -430,7 +464,7 @@ Results can be previewed, downloaded with a sensible filename, or copied.
 Several commissions can be watched at once, because agents genuinely work
 concurrently.
 
-### 7.7 The chain is the source of truth
+### 7.8 The chain is the source of truth
 
 PostgreSQL is a read cache. If the two disagree, the chain wins — and anything
 being actively watched reads the chain directly, so a lagging indexer slows
