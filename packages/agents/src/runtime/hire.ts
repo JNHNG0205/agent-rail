@@ -7,7 +7,7 @@ import {
   type JobBrief,
 } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
-import { accountOf, getAgent, listAgents, type AgentRecord } from "./store.js";
+import { accountOf, getAgent, isReady, listAgents, type AgentRecord } from "./store.js";
 import { rememberCommission } from "./work.js";
 
 /// One hosted agent hiring another.
@@ -29,7 +29,10 @@ export interface Quote {
 /// runtime someone else operates.
 export async function findProviders(exclude: string): Promise<AgentRecord[]> {
   return (await listAgents())
-    .filter((a) => a.role === "provider" && a.service !== null && a.id !== exclude)
+    // isReady, because an agent whose onboarding failed holds no identity and no
+    // gas. createJob rejects an unregistered provider, so hiring one wastes a
+    // conversation and leaves the client believing it commissioned something.
+    .filter((a) => a.role === "provider" && a.service !== null && isReady(a) && a.id !== exclude)
     .sort((a, b) => Number(a.service!.priceUsdc) - Number(b.service!.priceUsdc));
 }
 

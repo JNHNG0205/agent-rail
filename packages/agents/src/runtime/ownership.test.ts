@@ -20,6 +20,7 @@ function agent(createdBy: string | null): AgentRecord {
     chainId: 84532,
     createdBy,
     createdAt: new Date().toISOString(),
+    onboardedAt: new Date().toISOString(),
   };
 }
 

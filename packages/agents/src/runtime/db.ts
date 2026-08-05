@@ -60,6 +60,29 @@ export function initDb(): Promise<void> {
     await getPool().query(
       `CREATE INDEX IF NOT EXISTS agent_owner_idx ON ${SCHEMA}.agent (chain_id, created_by)`,
     );
+    // When onboarding finished. Null means it never did: the row is written
+    // before the agent is funded and registered, so a failure part way leaves
+    // a key that can be retried rather than lost — but the agent cannot work
+    // until it holds an identity, and advertising it invites clients to
+    // commission work it will fail at createJob.
+    //
+    // Backfilled once, when the column is first added: every agent that existed
+    // before this had already completed onboarding, and running the backfill on
+    // each startup would quietly mark future failures as successes.
+    await getPool().query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+           WHERE table_schema = '${SCHEMA}' AND table_name = 'agent'
+             AND column_name = 'onboarded_at'
+        ) THEN
+          ALTER TABLE ${SCHEMA}.agent ADD COLUMN onboarded_at timestamptz;
+          UPDATE ${SCHEMA}.agent SET onboarded_at = created_at;
+        END IF;
+      END $$;
+    `);
+
     // What each job asked for and what came back. Survives a restart: the
     // deliverable is the thing that was paid for, and no timeout brings it back
     // once the job has settled on its hash.

@@ -3,9 +3,11 @@ import { isDeliverableKind, type JobBrief } from "@agentrail/shared";
 import { getCommission, getDeliverable, rememberCommission } from "./work.js";
 import { addresses } from "@agentrail/shared";
 import {
-  listAgents,
-  getAgent,
   createAgent,
+  getAgent,
+  isReady,
+  listAgents,
+  markOnboarded,
   toPublic,
   type ServiceOffer,
 } from "./store.js";
@@ -144,7 +146,10 @@ export function startRuntime(): Promise<Server> {
       // GET /agents — the directory. This is discovery: an agent reads it to
       // find who sells what, rather than having a counterparty compiled in.
       if (method === "GET" && parts.length === 1 && parts[0] === "agents") {
-        json(200, (await listAgents()).map(toPublic));
+        // Only agents that finished onboarding. One that did not holds no
+        // identity and no gas, so listing it offers a service nobody can be
+        // paid for — and the creator already received the error that says so.
+        json(200, (await listAgents()).filter(isReady).map(toPublic));
         return;
       }
 
@@ -177,6 +182,10 @@ export function startRuntime(): Promise<Server> {
         });
         const account = await accountOf(record);
         await onboard(account, { treasuryKey: treasuryKey(), grantUsdc: true });
+        // After onboarding, never before: the flag means "this agent can work",
+        // and setting it alongside the row would make a failed onboarding
+        // indistinguishable from a finished one.
+        await markOnboarded(record.id);
         console.log(`[runtime] created assistant for ${owner ?? "an anonymous caller"}`);
         console.log(`[runtime]   ${await describe(account)}`);
         json(201, toPublic(record));
@@ -236,6 +245,7 @@ export function startRuntime(): Promise<Server> {
           treasuryKey: treasuryKey(),
           grantUsdc: record.role === "client",
         });
+        await markOnboarded(record.id);
 
         console.log(`[runtime] created ${record.role} "${record.name}" (${record.id})`);
         console.log(`[runtime]   ${await describe(account)}`);

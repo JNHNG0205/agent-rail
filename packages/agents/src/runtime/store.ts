@@ -51,6 +51,9 @@ export interface AgentRecord {
   /// added to a running system.
   createdBy: string | null;
   createdAt: string;
+  /// When onboarding completed. Null means it did not: the agent holds no
+  /// identity and no gas, so it cannot take a job.
+  onboardedAt: string | null;
 }
 
 interface Row {
@@ -63,6 +66,7 @@ interface Row {
   chain_id: number;
   created_by: string | null;
   created_at: Date;
+  onboarded_at: Date | null;
 }
 
 function toRecord(row: Row): AgentRecord {
@@ -76,10 +80,11 @@ function toRecord(row: Row): AgentRecord {
     chainId: row.chain_id,
     createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
+    onboardedAt: row.onboarded_at ? row.onboarded_at.toISOString() : null,
   };
 }
 
-const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_by, created_at
+const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at
                   FROM $SCHEMA.agent`;
 
 export async function listAgents(): Promise<AgentRecord[]> {
@@ -150,7 +155,7 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
   const rows = await query<Row>(
     `INSERT INTO $SCHEMA.agent (id, chain_id, name, role, service, private_key, address, created_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, name, role, service, private_key, address, chain_id, created_by, created_at`,
+       RETURNING id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at`,
     [
       id,
       CHAIN_ID,
@@ -163,6 +168,21 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
     ],
   );
   return toRecord(rows[0]!);
+}
+
+/// Record that an agent finished onboarding and can now take work.
+export async function markOnboarded(id: string): Promise<void> {
+  await query(`UPDATE $SCHEMA.agent SET onboarded_at = now() WHERE chain_id = $1 AND id = $2`, [
+    CHAIN_ID,
+    id,
+  ]);
+}
+
+/// An agent that holds an identity and gas, and can therefore act. The directory
+/// shows only these: a half-created agent advertising a service is a client
+/// commissioning work that fails at createJob, having already been quoted.
+export function isReady(record: AgentRecord): boolean {
+  return record.onboardedAt !== null;
 }
 
 /// The live account for a stored agent, for signing and sending.
@@ -184,6 +204,9 @@ export interface PublicAgent {
   service: ServiceOffer | null;
   createdBy: string | null;
   createdAt: string;
+  /// When onboarding completed. Null means it did not: the agent holds no
+  /// identity and no gas, so it cannot take a job.
+  onboardedAt: string | null;
 }
 
 export function toPublic(record: AgentRecord): PublicAgent {
@@ -195,6 +218,7 @@ export function toPublic(record: AgentRecord): PublicAgent {
     service: record.service,
     createdBy: record.createdBy,
     createdAt: record.createdAt,
+    onboardedAt: record.onboardedAt,
   };
 }
 
