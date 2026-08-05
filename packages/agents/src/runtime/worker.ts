@@ -5,7 +5,7 @@ import { watchEvents } from "../lib/watch.js";
 import { hashDeliverable } from "../lib/hash.js";
 import { runTask } from "../provider/task.js";
 import { listAgents, accountOf, type AgentRecord } from "./store.js";
-import { getCommission, rememberDeliverable } from "./server.js";
+import { getCommission, rememberDeliverable } from "./work.js";
 
 /// One watcher serving every provider the runtime hosts.
 ///
@@ -43,7 +43,7 @@ export function startProviderWorker(): () => void {
           const agent = await providerFor(job.provider);
           if (!agent) continue;
 
-          const brief = getCommission(agent.id, jobId);
+          const brief = await getCommission(agent.id, jobId);
           if (!brief) {
             console.error(
               `[runtime] ${agent.name}: job ${jobId} funded but no commission received`,
@@ -65,7 +65,7 @@ export function startProviderWorker(): () => void {
 
           // Serve it before committing the hash, so the evaluator can never see
           // DeliverableSubmitted for content it cannot yet fetch.
-          rememberDeliverable(agent.id, jobId, svg);
+          await rememberDeliverable(agent.id, jobId, svg);
 
           const account = await accountOf(agent);
           await account.send([

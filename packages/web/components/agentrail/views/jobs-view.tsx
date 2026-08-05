@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ArrowRight, Lock, Hash, Fingerprint, Layers3 } from 'lucide-react'
+import {
+  ArrowRight,
+  ExternalLink,
+  Fingerprint,
+  Hash,
+  Layers3,
+  Lock,
+  X,
+} from 'lucide-react'
 import {
   JOB_STEPS,
   type JobStep,
@@ -179,6 +187,36 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
                 <CopyButton value={job.deliverableHash} label="Copy deliverable hash" />
               )}
             </div>
+
+            {/* The work itself, not just its fingerprint. The hash proves the
+                bytes were not swapped; it does not let anyone read them, and a
+                settled job whose output nobody can see is a receipt without a
+                purchase. The route re-derives the hash before serving. */}
+            {job.deliverableHash && (
+              <div className="rounded-lg border border-border bg-secondary/40">
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Delivered work
+                  </p>
+                  <a
+                    href={`/api/deliverable/${job.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                  >
+                    Open <ExternalLink className="size-3" aria-hidden="true" />
+                  </a>
+                </div>
+                {/* Sandboxed: untrusted output from another agent, served under
+                    a locked-down CSP by the route. */}
+                <iframe
+                  src={`/api/deliverable/${job.id}`}
+                  title={`Deliverable for job ${job.id}`}
+                  sandbox=""
+                  className="h-64 w-full rounded-b-lg border-t border-border bg-white"
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-2.5 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
               <Layers3

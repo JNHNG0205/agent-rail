@@ -8,7 +8,7 @@ import {
 } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
 import { accountOf, getAgent, listAgents, type AgentRecord } from "./store.js";
-import { rememberCommission } from "./server.js";
+import { rememberCommission } from "./work.js";
 
 /// One hosted agent hiring another.
 ///
@@ -95,7 +95,7 @@ export async function hire(opts: {
 
   // The brief must reach the provider before the escrow is funded: JobFunded is
   // what wakes its worker, and it has nothing to build without this.
-  rememberCommission(provider.id, jobId, brief);
+  await rememberCommission(provider.id, jobId, brief);
 
   // approve and fundJob batch. Sent apart they race the endpoint — approve is
   // mined, the node estimating fundJob has not applied that block, transferFrom

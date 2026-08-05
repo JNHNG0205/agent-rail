@@ -60,6 +60,20 @@ export function initDb(): Promise<void> {
     await getPool().query(
       `CREATE INDEX IF NOT EXISTS agent_owner_idx ON ${SCHEMA}.agent (chain_id, created_by)`,
     );
+    // What each job asked for and what came back. Survives a restart: the
+    // deliverable is the thing that was paid for, and no timeout brings it back
+    // once the job has settled on its hash.
+    await getPool().query(`
+      CREATE TABLE IF NOT EXISTS ${SCHEMA}.job_work (
+        chain_id    integer     NOT NULL,
+        job_id      text        NOT NULL,
+        agent_id    text        NOT NULL,
+        brief       jsonb,
+        deliverable text,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (chain_id, job_id)
+      )
+    `);
     // An address may hold only one identity, so two agents cannot share one.
     await getPool().query(
       `CREATE UNIQUE INDEX IF NOT EXISTS agent_address_idx ON ${SCHEMA}.agent (chain_id, lower(address))`,

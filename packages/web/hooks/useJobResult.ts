@@ -36,10 +36,12 @@ export function useJobResult(jobId: string | null): JobProgress {
   const poll = useCallback(async () => {
     if (!jobId) return;
     try {
-      const res = await fetch("/api/jobs");
+      // By id, not by scanning a page of recent jobs: that page is capped, so a
+      // job old enough to fall off it would poll forever and never resolve.
+      const res = await fetch(`/api/jobs?id=${encodeURIComponent(jobId)}`);
       if (!res.ok) return;
       const rows = (await res.json()) as JobRow[];
-      const row = rows.find((r) => r.id === jobId);
+      const row = rows[0];
       // Absent simply means the indexer has not caught up yet — not an error.
       if (!row) return;
 

@@ -1,5 +1,6 @@
 import { createServer, type Server, type IncomingMessage } from "node:http";
 import { isDeliverableKind, type JobBrief } from "@agentrail/shared";
+import { getCommission, getDeliverable, rememberCommission } from "./work.js";
 import { addresses } from "@agentrail/shared";
 import {
   listAgents,
@@ -44,24 +45,6 @@ import { accountOf } from "./store.js";
 ///   POST /agents/:id/commission        hand it a brief
 ///   GET  /agents/:id/commission/:jobId
 ///   GET  /agents/:id/deliverable/:jobId
-
-/// Work in flight, keyed by "agentId:jobId" so two agents cannot collide on a
-/// job number. In memory only: the chain holds the authoritative deliverable
-/// hash, and a restart losing the content is recoverable through the timeout.
-const commissions = new Map<string, JobBrief>();
-const deliverables = new Map<string, string>();
-
-const workKey = (agentId: string, jobId: bigint) => `${agentId}:${jobId}`;
-
-export function rememberCommission(agentId: string, jobId: bigint, brief: JobBrief): void {
-  commissions.set(workKey(agentId, jobId), brief);
-}
-export function getCommission(agentId: string, jobId: bigint): JobBrief | undefined {
-  return commissions.get(workKey(agentId, jobId));
-}
-export function rememberDeliverable(agentId: string, jobId: bigint, svg: string): void {
-  deliverables.set(workKey(agentId, jobId), svg);
-}
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -384,7 +367,7 @@ export function startRuntime(): Promise<Server> {
           json(400, { error: "brief is malformed" });
           return;
         }
-        rememberCommission(agent.id, BigInt(b.jobId), b.brief);
+        await rememberCommission(agent.id, BigInt(b.jobId), b.brief);
         console.log(`[runtime] ${agent.name}: commissioned for job ${b.jobId}`);
         json(200, { ok: true });
         return;
@@ -392,7 +375,7 @@ export function startRuntime(): Promise<Server> {
 
       // GET /agents/:id/commission/:jobId — the evaluator reads the brief here.
       if (method === "GET" && parts[2] === "commission" && parts.length === 4) {
-        const brief = getCommission(agent.id, BigInt(parts[3]!));
+        const brief = await getCommission(agent.id, BigInt(parts[3]!));
         if (!brief) {
           json(404, { error: `no commission for job ${parts[3]}` });
           return;
@@ -403,7 +386,7 @@ export function startRuntime(): Promise<Server> {
 
       // GET /agents/:id/deliverable/:jobId — the work itself.
       if (method === "GET" && parts[2] === "deliverable" && parts.length === 4) {
-        const svg = deliverables.get(workKey(agent.id, BigInt(parts[3]!)));
+        const svg = await getDeliverable(agent.id, BigInt(parts[3]!));
         if (!svg) {
           json(404, { error: `no deliverable for job ${parts[3]}` });
           return;
