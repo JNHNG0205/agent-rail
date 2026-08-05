@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { agentLabel } from "@agentrail/shared";
 import type { Agent } from "@/lib/agentrail-data";
 import { truncateHex } from "@/lib/agentrail-data";
-import { readReputation, readUsdcBalance } from "@/lib/contracts";
+import { readAgentStats, type AgentStats } from "@/lib/contracts";
 import { useSession } from "@/lib/session";
 
 /// Every agent the system knows about, from the three sources that actually
@@ -100,23 +100,24 @@ export function useRegistry() {
         label: a.label.startsWith("0x") ? truncateHex(a.address) : a.label,
       }));
 
-      // Live reads, because reputation moves with every settlement and the
-      // indexer lags by a few seconds.
-      const enriched = await Promise.all(
-        merged.map(async (a) => {
-          const [rep, bal] = await Promise.all([
-            readReputation(a.address).catch(() => null),
-            readUsdcBalance(a.address).catch(() => null),
-          ]);
+      // Live, because reputation moves with every settlement and the indexer
+      // lags by a few seconds — but in one request rather than two per agent.
+      // The per-agent version issued sixteen calls for eight agents on every
+      // load, from every open tab, against a shared and exhaustible key.
+      const stats = await readAgentStats(merged.map((a) => a.address)).catch(
+        () => new Map<string, AgentStats>(),
+      );
+
+      setAgents(
+        merged.map((a) => {
+          const live = stats.get(a.address.toLowerCase());
           return {
             ...a,
-            reputation: rep !== null ? Number(rep) : a.reputation,
-            usdcBalance: bal ?? undefined,
+            reputation: live ? Number(live.reputation) : a.reputation,
+            usdcBalance: live?.usdcBalance,
           };
         }),
       );
-
-      setAgents(enriched);
     } catch (err) {
       setError(err instanceof Error ? err.message : "could not load agents");
     } finally {
