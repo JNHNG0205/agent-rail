@@ -16,7 +16,7 @@ import {
   LogOut,
   ExternalLink,
 } from 'lucide-react'
-import { truncateHex } from '@/lib/agentrail-data'
+import { formatUsdc, truncateHex } from '@/lib/agentrail-data'
 import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
 import { useWalletStatus } from '@/hooks/useWalletStatus'
 import { cn } from '@/lib/utils'
@@ -169,10 +169,22 @@ export function TopNav({
                     </div>
 
                     <div className="space-y-1">
-                      {/* No USDC row. Your wallet holds none by design — the
-                          agents hold their own and pay their own gas — so a
-                          balance here reads as funds at stake when none are.
-                          The line below says so instead. */}
+                      {/* Shown again, and now it means something. This was
+                          removed while a wallet could only ever hold zero —
+                          agents hold their own funds and pay their own gas — so
+                          a balance read as funds at stake when none were. Then
+                          withdrawal gave earnings a way here, and a person who
+                          has just moved money needs to see that it arrived. */}
+                      {connectedAddress && (
+                      <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
+                        <span>Withdrawn to this wallet</span>
+                        <span className="font-medium text-foreground tabular-nums">
+                          {walletStatus.usdcBalance !== null
+                            ? `${formatUsdc(walletStatus.usdcBalance)} USDC`
+                            : '—'}
+                        </span>
+                      </div>
+                      )}
 
                       <p className="px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
                         {!connectedAddress

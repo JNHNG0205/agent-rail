@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { PrivySession, LocalSession } from '@/lib/session'
+import { chain } from '@/lib/viem'
 
 /// Sign-in, wired up. Member 4.
 ///
@@ -38,6 +39,12 @@ export function Providers({ children }: { children: ReactNode }) {
           accentColor: '#6366f1',
           walletChainType: 'ethereum-only',
         },
+        // The chain this app settles on, so an embedded wallet is created and
+        // shown on it. Without this Privy defaults to Ethereum mainnet, and
+        // someone looking for the USDC their agent just sent finds an empty
+        // wallet on the wrong network — the funds are fine, the view is not.
+        defaultChain: chain,
+        supportedChains: [chain],
       }}
     >
       <PrivySession>{children}</PrivySession>
