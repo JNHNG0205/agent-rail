@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { keccak256, toBytes } from "viem";
 import { query } from "@/lib/db";
-import { RUNTIME_URL } from "@/lib/runtime";
+import { runtimeUrl } from "@/lib/runtime";
+import { checkDeliverable } from "@/lib/deliverable";
 
 /// GET /api/deliverable/:jobId — the finished work, as SVG. Member 4.
 ///
@@ -39,14 +39,7 @@ export async function GET(
     if (!job) {
       return NextResponse.json({ error: `no job ${params.jobId}` }, { status: 404 });
     }
-    if (!job.deliverableHash) {
-      return NextResponse.json(
-        { error: `job ${params.jobId} has no deliverable yet` },
-        { status: 409 },
-      );
-    }
-
-    const directory = (await (await fetch(`${RUNTIME_URL}/agents`, { cache: "no-store" })).json()) as
+    const directory = (await (await fetch(`${runtimeUrl()}/agents`, { cache: "no-store" })).json()) as
       | DirectoryEntry[]
       | { error: string };
     if (!Array.isArray(directory)) {
@@ -63,33 +56,24 @@ export async function GET(
     }
 
     const res = await fetch(
-      `${RUNTIME_URL}/agents/${agent.id}/deliverable/${params.jobId}`,
+      `${runtimeUrl()}/agents/${agent.id}/deliverable/${params.jobId}`,
       { cache: "no-store" },
     );
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `the provider no longer has job ${params.jobId}` },
-        { status: 404 },
-      );
-    }
+    const served = res.ok ? await res.text() : null;
 
-    const svg = await res.text();
-
-    // The chain holds the hash; the provider holds the bytes. Checking them here
-    // is what makes serving provider-supplied content safe to display: anything
-    // that does not hash to what was committed is not the work that was paid
-    // for, whether it was swapped deliberately or is simply stale.
-    const actual = keccak256(toBytes(svg));
-    if (actual.toLowerCase() !== job.deliverableHash.toLowerCase()) {
-      return NextResponse.json(
-        {
-          error: `the served deliverable does not match the hash committed on chain for job ${params.jobId}`,
-          onChain: job.deliverableHash,
-          served: actual,
-        },
-        { status: 409 },
-      );
+    // The chain holds the hash; the provider holds the bytes. Checking them
+    // against each other is what makes provider-supplied content safe to show —
+    // see lib/deliverable.
+    const check = checkDeliverable({
+      jobId: params.jobId,
+      onChainHash: job.deliverableHash,
+      served,
+    });
+    if (!check.ok) {
+      const { ok: _ok, status, ...body } = check;
+      return NextResponse.json(body, { status });
     }
+    const svg = check.svg;
 
     return new NextResponse(svg, {
       status: 200,
