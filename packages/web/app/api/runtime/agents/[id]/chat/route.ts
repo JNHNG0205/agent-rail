@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { proxy } from "@/lib/runtime";
+import { ownerOf } from "@/lib/owner";
 
 /// POST /api/runtime/agents/:id/chat — talk to one of your agents. Member 4.
 ///
@@ -17,6 +18,7 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "body must be JSON" }, { status: 400 });
   }
+  const owner = await ownerOf(request);
   const result = await proxy(`/agents/${encodeURIComponent(params.id)}/chat`, {
     method: "POST",
     body,

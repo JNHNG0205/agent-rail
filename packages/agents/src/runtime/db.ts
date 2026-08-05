@@ -46,10 +46,20 @@ export function initDb(): Promise<void> {
         service      jsonb,
         private_key  text        NOT NULL,
         address      text        NOT NULL,
+        created_by   text,
         created_at   timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY (chain_id, id)
       )
     `);
+    // Added after the table existed, so it must be applied separately. Nullable
+    // on purpose: agents created before ownership have no owner, and they stay
+    // usable as a shared set rather than becoming unreachable.
+    await getPool().query(
+      `ALTER TABLE ${SCHEMA}.agent ADD COLUMN IF NOT EXISTS created_by text`,
+    );
+    await getPool().query(
+      `CREATE INDEX IF NOT EXISTS agent_owner_idx ON ${SCHEMA}.agent (chain_id, created_by)`,
+    );
     // An address may hold only one identity, so two agents cannot share one.
     await getPool().query(
       `CREATE UNIQUE INDEX IF NOT EXISTS agent_address_idx ON ${SCHEMA}.agent (chain_id, lower(address))`,

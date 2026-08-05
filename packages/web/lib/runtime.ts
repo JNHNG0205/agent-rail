@@ -29,13 +29,17 @@ export interface ProxyResult {
 /// agent — so they are passed through rather than collapsed into 200 or 500.
 export async function proxy(
   path: string,
-  init?: { method?: string; body?: unknown },
+  init?: { method?: string; body?: unknown; owner?: string | null },
 ): Promise<ProxyResult> {
   try {
     const secret = runtimeSecret();
     const headers: Record<string, string> = {};
     if (init?.body) headers["content-type"] = "application/json";
     if (secret) headers.authorization = `Bearer ${secret}`;
+    // Who the runtime should treat this request as. Set here, from what this
+    // server established about the caller — never taken from the request body,
+    // or a browser could name any owner it liked.
+    if (init?.owner) headers["x-agent-owner"] = init.owner;
 
     const res = await fetch(`${runtimeUrl()}${path}`, {
       method: init?.method ?? "GET",

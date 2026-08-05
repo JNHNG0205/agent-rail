@@ -13,6 +13,23 @@ import { hire, findProviders } from "./hire.js";
 import { chat, isChatHistory } from "./chat.js";
 import { isAuthorised, assertSafeToListen, host, secret } from "./auth.js";
 import { proposeOffer } from "./offer.js";
+import { mayActAs } from "./store.js";
+
+/// Who the caller says they are.
+///
+/// Set by the web app, which is the only thing that reaches this service and
+/// which shares its secret — the browser never talks to the runtime directly.
+/// The runtime takes the value on trust for exactly that reason: authenticating
+/// the person is the web layer's job, and duplicating it here would mean two
+/// implementations of the same rule.
+///
+/// Deliberately opaque. An address today, a verified identity tomorrow; nothing
+/// here interprets it beyond comparing one to another.
+function callerOwner(req: IncomingMessage): string | null {
+  const header = req.headers["x-agent-owner"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return value && value.length > 0 ? value : null;
+}
 import { accountOf } from "./store.js";
 
 /// The agent runtime's HTTP surface.
@@ -142,6 +159,41 @@ export function startRuntime(): Promise<Server> {
         return;
       }
 
+      // POST /agents/assistant — the caller's own client agent, created on first
+      // sight. Idempotent, because the web app calls it on every sign-in and a
+      // second assistant would mean a second USDC balance and a split history.
+      //
+      // Created here rather than at startup because the runtime cannot know who
+      // will show up. An owner that never appears never costs anything.
+      if (method === "POST" && parts.length === 2 && parts[0] === "agents" && parts[1] === "assistant") {
+        const owner = callerOwner(req);
+        const clients = (await listAgents()).filter((a) => a.role === "client");
+
+        // "Which one is mine" is a stricter question than "may I use this".
+        // mayActAs treats an unowned agent as open to everyone, which is right
+        // for authorising a call and wrong here: matching on it would hand every
+        // new owner the shared legacy assistant instead of creating theirs.
+        const mine = owner
+          ? clients.find((a) => a.createdBy?.toLowerCase() === owner.toLowerCase())
+          : clients.find((a) => a.createdBy === null);
+        if (mine) {
+          json(200, toPublic(mine));
+          return;
+        }
+
+        const record = await createAgent({
+          name: "Your Assistant",
+          role: "client",
+          createdBy: owner,
+        });
+        const account = await accountOf(record);
+        await onboard(account, { treasuryKey: treasuryKey(), grantUsdc: true });
+        console.log(`[runtime] created assistant for ${owner ?? "an anonymous caller"}`);
+        console.log(`[runtime]   ${await describe(account)}`);
+        json(201, toPublic(record));
+        return;
+      }
+
       // POST /agents/preview — propose a service from a plain-language purpose,
       // without creating anything. Separate from creation so a person sees the
       // terms their agent will be held to before committing an identity to the
@@ -185,6 +237,7 @@ export function startRuntime(): Promise<Server> {
           name: b.name.trim(),
           role: b.role,
           service: b.role === "provider" ? (b.service as ServiceOffer) : null,
+          createdBy: callerOwner(req),
         });
 
         // Fund, register, and grant a client its spending money. Done here so
@@ -208,6 +261,11 @@ export function startRuntime(): Promise<Server> {
           json(404, { error: `no agent "${parts[1]}"` });
           return;
         }
+        if (!mayActAs(agent, callerOwner(req))) {
+          json(403, { error: `"${agent.name}" belongs to someone else` });
+          return;
+        }
+
         const body: unknown = JSON.parse(await readBody(req));
         const history = (body as { messages?: unknown }).messages;
         if (!isChatHistory(history)) {
@@ -237,6 +295,11 @@ export function startRuntime(): Promise<Server> {
           json(404, { error: `no agent "${parts[1]}"` });
           return;
         }
+        if (!mayActAs(client, callerOwner(req))) {
+          json(403, { error: `"${client.name}" belongs to someone else` });
+          return;
+        }
+
         const body: unknown = JSON.parse(await readBody(req));
         const b = body as { brief?: unknown; providerId?: unknown };
         if (!isPosterBrief(b.brief)) {

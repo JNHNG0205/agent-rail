@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { proxy } from "@/lib/runtime";
+import { ownerOf } from "@/lib/owner";
 
 /// The agent runtime's directory — who exists and what they sell. Member 4.
 ///
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "body must be JSON" }, { status: 400 });
   }
-  const result = await proxy("/agents", { method: "POST", body });
+  const owner = await ownerOf(request);
+  const result = await proxy("/agents", { method: "POST", body, owner });
   return NextResponse.json(result.body, { status: result.status });
 }

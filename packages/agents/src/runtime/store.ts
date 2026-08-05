@@ -33,6 +33,13 @@ export interface AgentRecord {
   /// Smart account address: the agent's on-chain identity.
   address: `0x${string}`;
   chainId: number;
+  /// Who created it. An opaque identifier the caller supplied — an address
+  /// today, a verified identity later — never interpreted here.
+  ///
+  /// Null for agents created before ownership existed. Those stay usable by
+  /// anyone rather than becoming unreachable, which is what lets ownership be
+  /// added to a running system.
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -44,6 +51,7 @@ interface Row {
   private_key: string;
   address: string;
   chain_id: number;
+  created_by: string | null;
   created_at: Date;
 }
 
@@ -56,11 +64,12 @@ function toRecord(row: Row): AgentRecord {
     privateKey: row.private_key as Hex,
     address: row.address as `0x${string}`,
     chainId: row.chain_id,
+    createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
   };
 }
 
-const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_at
+const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_by, created_at
                   FROM $SCHEMA.agent`;
 
 export async function listAgents(): Promise<AgentRecord[]> {
@@ -93,6 +102,23 @@ export interface CreateAgentInput {
   name: string;
   role: "client" | "provider";
   service?: ServiceOffer | null;
+  /// Who is creating it. Omitted means unowned, which anyone may use.
+  createdBy?: string | null;
+}
+
+/// May this caller act as this agent — hire with it, or talk to it?
+///
+/// Ownership is about acting, not about seeing. The directory stays public
+/// because that is what discovery means: an agent finds a counterparty by
+/// reading what everyone offers. What it must not do is spend someone else's
+/// agent's money.
+///
+/// An agent with no owner predates ownership and stays open, so adding this
+/// does not strand the agents already running.
+export function mayActAs(record: AgentRecord, caller: string | null): boolean {
+  if (record.createdBy === null) return true;
+  if (caller === null) return false;
+  return record.createdBy.toLowerCase() === caller.toLowerCase();
 }
 
 /// Mint a new agent: fresh keypair, derived smart account, persisted.
@@ -112,10 +138,19 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
   // The key is written before anything else happens to the agent, so a crash
   // during onboarding cannot lose it.
   const rows = await query<Row>(
-    `INSERT INTO $SCHEMA.agent (id, chain_id, name, role, service, private_key, address)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, role, service, private_key, address, chain_id, created_at`,
-    [id, CHAIN_ID, input.name, input.role, service ? JSON.stringify(service) : null, privateKey, account.address],
+    `INSERT INTO $SCHEMA.agent (id, chain_id, name, role, service, private_key, address, created_by)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, role, service, private_key, address, chain_id, created_by, created_at`,
+    [
+      id,
+      CHAIN_ID,
+      input.name,
+      input.role,
+      service ? JSON.stringify(service) : null,
+      privateKey,
+      account.address,
+      input.createdBy ?? null,
+    ],
   );
   return toRecord(rows[0]!);
 }
@@ -133,6 +168,7 @@ export interface PublicAgent {
   role: "client" | "provider";
   address: `0x${string}`;
   service: ServiceOffer | null;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -143,6 +179,7 @@ export function toPublic(record: AgentRecord): PublicAgent {
     role: record.role,
     address: record.address,
     service: record.service,
+    createdBy: record.createdBy,
     createdAt: record.createdAt,
   };
 }
