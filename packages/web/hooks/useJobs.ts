@@ -43,7 +43,7 @@ export function useJobs(options?: UseJobsOptions) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const { logs: liveEvents } = useLiveEvents();
+  const { latestId } = useLiveEvents();
 
   // Read a single job's live state directly from JobContract on-chain
   const fetchSingleJobOnChain = useCallback(async (targetId: bigint): Promise<OnChainJobDetails | null> => {
@@ -124,7 +124,7 @@ export function useJobs(options?: UseJobsOptions) {
   // Re-fetch on-chain state and API data automatically when new contract logs arrive
   useEffect(() => {
     fetchJobs();
-  }, [fetchJobs, liveEvents.length]);
+  }, [fetchJobs, latestId]);
 
   return {
     jobs,
