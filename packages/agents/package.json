@@ -9,7 +9,8 @@
     "start:c": "tsx src/agent-c/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "start:runtime": "tsx src/runtime/index.ts"
+    "start:runtime": "tsx src/runtime/index.ts",
+    "sweep": "tsx src/agent-c/sweep.ts"
   },
   "dependencies": {
     "@agentrail/shared": "*",

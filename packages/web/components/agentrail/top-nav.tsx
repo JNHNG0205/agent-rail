@@ -16,7 +16,9 @@ import {
   LogOut,
   ExternalLink,
 } from 'lucide-react'
-import { truncateHex } from '@/lib/agentrail-data'
+import { truncateHex, formatUsdc } from '@/lib/agentrail-data'
+import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
+import { useWalletStatus } from '@/hooks/useWalletStatus'
 import { cn } from '@/lib/utils'
 
 export type TabId = 'assistant' | 'dashboard' | 'registry' | 'jobs' | 'evaluator'
@@ -64,6 +66,7 @@ export function TopNav({
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const walletStatus = useWalletStatus(connectedAddress)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -124,8 +127,8 @@ export function TopNav({
                   <span className="font-mono text-sm text-foreground">
                     {truncateHex(connectedAddress, 6, 4)}
                   </span>
-                  <span className="hidden rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary sm:inline">
-                    ERC-7579 Active
+                  <span className="hidden rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
+                    {walletStatus.isRegisteredAgent ? 'Registered agent' : 'Observer'}
                   </span>
                   <ChevronDown
                     className={cn(
@@ -163,11 +166,28 @@ export function TopNav({
                     </div>
 
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground rounded-lg bg-secondary/30">
+                      <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
+                        <span>USDC</span>
+                        <span className="font-medium text-foreground tabular-nums">
+                          {walletStatus.usdcBalance !== null
+                            ? formatUsdc(walletStatus.usdcBalance)
+                            : '—'}
+                        </span>
+                      </div>
+
+                      <p className="px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                        {walletStatus.agentName
+                          ? `This address is the agent "${walletStatus.agentName}".`
+                          : walletStatus.isRegisteredAgent
+                            ? 'This address holds an identity token but no agent is running for it.'
+                            : 'Agents hold their own accounts and sign their own transactions, so nothing here is spent on your behalf.'}
+                      </p>
+
+                      <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
                         <span>Network</span>
                         <span className="inline-flex items-center gap-1.5 font-medium text-success">
                           <span className="size-1.5 rounded-full bg-success" />
-                          Hardhat (31337)
+                          {CHAIN_NAME} ({CHAIN_ID})
                         </span>
                       </div>
 

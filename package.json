@@ -29,6 +29,7 @@
     "runtime": "npm -w packages/agents run start:runtime",
     "runtime:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:runtime",
     "agent:c:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run start:c",
+    "sweep:base-sepolia": "CHAIN_ID=84532 npm -w packages/agents run sweep --",
     "test": "npm test --workspaces --if-present",
     "coverage": "npm -w packages/contracts run coverage",
     "dev": "bash scripts/dev.sh",

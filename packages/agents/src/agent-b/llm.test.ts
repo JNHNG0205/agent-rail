@@ -55,7 +55,7 @@ test("rejects a provider response with trailing content after </svg>", async () 
   process.env.LLM_API_KEY = "sk-or-test";
   process.env.LLM_MODEL = "some/model";
   stubFetch("<svg></svg><script>x</script>");
-  await assert.rejects(() => runTask(BRIEF), /not a complete SVG document/);
+  await assert.rejects(() => runTask(BRIEF), /complete SVG document/);
 });
 
 test("rejects a prose provider response with no SVG at all", async () => {
@@ -63,7 +63,7 @@ test("rejects a prose provider response with no SVG at all", async () => {
   process.env.LLM_API_KEY = "sk-or-test";
   process.env.LLM_MODEL = "some/model";
   stubFetch("Sorry, I can't help with that request.");
-  await assert.rejects(() => runTask(BRIEF), /not a complete SVG document/);
+  await assert.rejects(() => runTask(BRIEF), /complete SVG document/);
 });
 
 test("retries once and accepts a valid SVG on the second attempt", async () => {

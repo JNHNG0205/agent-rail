@@ -1,5 +1,6 @@
 import type { PosterBrief } from "@agentrail/shared";
 import { completeValidated, stripFences } from "../lib/llm.js";
+import { isAcceptableSvg, unsafeReason } from "./svg.js";
 
 const SYSTEM = `You are a graphic designer agent. You produce poster designs as SVG.
 
@@ -50,12 +51,18 @@ export async function runTask(brief: PosterBrief): Promise<string> {
       mock: mockPoster(brief),
       maxTokens: 4000,
     },
-    (value) => value.startsWith("<svg") && value.endsWith("</svg>"),
-    "the reply was not a complete SVG document (it must start with <svg and end with </svg>)",
+    isAcceptableSvg,
+    "the reply must be a complete SVG document with no script, event handlers or remote references",
     stripFences,
   );
-  // TODO(M3): this only checks the outer tags, e.g. "<svg><script>...</script></svg>" would
-  //           pass. The returned string is untrusted provider output — sanitise it before
-  //           rendering as HTML in the web UI; do not trust it as safe markup as-is.
+
+  // Checked, not sanitised. The hash of exactly these bytes goes on chain and
+  // the evaluator grades exactly these bytes, so rewriting the content here
+  // would leave the three disagreeing. A reply that fails is retried instead —
+  // see svg.ts for what is refused and why.
+  const unsafe = unsafeReason(svg);
+  if (unsafe) {
+    throw new Error(`provider produced an unsafe SVG: ${unsafe}`);
+  }
   return svg;
 }
