@@ -18,6 +18,7 @@ import {
   truncateHex,
 } from '@/lib/agentrail-data'
 import { useJobs } from '@/hooks/useJobs'
+import { useJobResult } from '@/hooks/useJobResult'
 import { useRegistry } from '@/hooks/useRegistry'
 import { JOB_STATE_LABELS, agentLabel } from '@agentrail/shared'
 import { ProgressTracker } from '@/components/agentrail/progress-tracker'
@@ -70,6 +71,14 @@ interface JobRow {
 }
 
 function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
+  // Live, from the chain. The row behind this drawer comes from the indexer,
+  // which is right for a list of history and wrong the moment someone opens a
+  // job that is still moving: a job settled minutes ago still read "Submitted"
+  // here while its escrow had already been released. The list can lag; the
+  // thing someone opened to watch cannot.
+  const live = useJobResult(job.id)
+  const status = live.stage ?? job.status
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -119,7 +128,7 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           <div className="flex items-center justify-between">
-            <StatusBadge status={job.status} />
+            <StatusBadge status={status} />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
               <Lock className="size-3.5" aria-hidden="true" />
               {formatUsdc(job.amount)} USDC
@@ -127,7 +136,7 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
           </div>
 
           <div className="rounded-xl border border-border bg-background/40 p-4">
-            <ProgressTracker currentStep={job.status} />
+            <ProgressTracker currentStep={status} />
           </div>
 
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/40 px-3 py-3">
@@ -194,7 +203,7 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
                 bytes were not swapped; it does not let anyone read them, and a
                 settled job whose output nobody can see is a receipt without a
                 purchase. The route re-derives the hash before serving. */}
-            {job.deliverableHash && (
+            {live.deliverableUrl && (
               <div className="rounded-lg border border-border bg-secondary/40">
                 <div className="flex items-center justify-between gap-2 px-3 py-2.5">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
