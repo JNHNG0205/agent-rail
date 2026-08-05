@@ -19,10 +19,19 @@ export interface OnChainJobDetails {
   deadline: bigint;
 }
 
+/// How many of the most recent jobs to load. The chain never forgets, so the
+/// job list only grows — showing all of it buries what just happened under
+/// every rehearsal that came before.
+const DEFAULT_LIMIT = 25;
+
 export interface UseJobsOptions {
   jobId?: bigint | number;
   stateFilter?: JobStateLabel;
   agentAddress?: `0x${string}`;
+  /// Raise it when filtering client-side: the filters below run over what was
+  /// fetched, so a narrow filter over a short list can come back empty while
+  /// matching jobs sit just outside it.
+  limit?: number;
 }
 
 /// Fetches active job state and details directly from JobContract.sol via viem's readContract,
@@ -84,7 +93,7 @@ export function useJobs(options?: UseJobsOptions) {
         setActiveJobDetails(details);
       }
 
-      const res = await fetch("/api/jobs");
+      const res = await fetch(`/api/jobs?limit=${options?.limit ?? DEFAULT_LIMIT}`);
       if (res.ok) {
         const data: JobRow[] = await res.json();
         setRawRows(data);
@@ -110,7 +119,7 @@ export function useJobs(options?: UseJobsOptions) {
     } finally {
       setLoading(false);
     }
-  }, [options?.jobId, options?.stateFilter, options?.agentAddress, fetchSingleJobOnChain]);
+  }, [options?.jobId, options?.stateFilter, options?.agentAddress, options?.limit, fetchSingleJobOnChain]);
 
   // Re-fetch on-chain state and API data automatically when new contract logs arrive
   useEffect(() => {
