@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuthedFetch, useSession } from "@/lib/session";
 
 /// Talking to your agent, and getting it to commission work. Member 4.
 ///
@@ -41,6 +42,8 @@ const GREETING: ChatMessage = {
 };
 
 export function useAssistant() {
+  const { ready, signedIn } = useSession();
+  const authedFetch = useAuthedFetch();
   const [agents, setAgents] = useState<RuntimeAgent[]>([]);
   const [client, setClient] = useState<RuntimeAgent | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
@@ -54,21 +57,47 @@ export function useAssistant() {
   // second or two, and a double submit would interleave two histories.
   const busy = useRef(false);
 
+  // The directory is public — an agent finds a counterparty by reading what
+  // everyone offers, so this needs no sign-in.
   const loadAgents = useCallback(async () => {
     try {
       const res = await fetch("/api/runtime/agents");
       if (!res.ok) throw new Error("the agent runtime is not reachable");
-      const list = (await res.json()) as RuntimeAgent[];
-      setAgents(list);
-      setClient(list.find((a) => a.role === "client") ?? null);
+      setAgents((await res.json()) as RuntimeAgent[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "could not load agents");
     }
   }, []);
 
+  /// Your own assistant, created on first sign-in and returned thereafter.
+  ///
+  /// Deliberately not the first client agent in the directory, which is what
+  /// this did before owners existed: that hands everyone the same agent, so two
+  /// people share one USDC balance and one conversation.
+  const loadAssistant = useCallback(async () => {
+    if (!signedIn) {
+      setClient(null);
+      return;
+    }
+    try {
+      const res = await authedFetch("/api/runtime/agents/assistant", { method: "POST" });
+      const body = (await res.json()) as RuntimeAgent | { error: string };
+      if ("error" in body) throw new Error(body.error);
+      setClient(body);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "could not reach your assistant");
+    }
+  }, [signedIn, authedFetch]);
+
   useEffect(() => {
     void loadAgents();
   }, [loadAgents]);
+
+  // Waits for `ready`: acting on a not-yet-restored session would create a
+  // second assistant for a user who already has one.
+  useEffect(() => {
+    if (ready) void loadAssistant();
+  }, [ready, loadAssistant]);
 
   const send = useCallback(
     async (text: string) => {
@@ -81,7 +110,7 @@ export function useAssistant() {
       setThinking(true);
 
       try {
-        const res = await fetch(`/api/runtime/agents/${client.id}/chat`, {
+        const res = await authedFetch(`/api/runtime/agents/${client.id}/chat`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ messages: next }),
@@ -101,7 +130,7 @@ export function useAssistant() {
         busy.current = false;
       }
     },
-    [client, messages],
+    [client, messages, authedFetch],
   );
 
   const hire = useCallback(async () => {
@@ -110,7 +139,7 @@ export function useAssistant() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/runtime/agents/${client.id}/hire`, {
+      const res = await authedFetch(`/api/runtime/agents/${client.id}/hire`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ brief }),
@@ -141,7 +170,7 @@ export function useAssistant() {
     } finally {
       setHiring(false);
     }
-  }, [client, brief, hiring]);
+  }, [client, brief, hiring, authedFetch]);
 
   const reset = useCallback(() => {
     setMessages([GREETING]);
@@ -152,5 +181,20 @@ export function useAssistant() {
 
   const providers = agents.filter((a) => a.role === "provider");
 
-  return { client, providers, messages, brief, thinking, hiring, job, error, send, hire, reset, loadAgents };
+  return {
+    client,
+    providers,
+    messages,
+    brief,
+    thinking,
+    hiring,
+    job,
+    error,
+    send,
+    hire,
+    reset,
+    loadAgents,
+    /// The view distinguishes "no assistant yet" from "sign in to get one".
+    needsSignIn: ready && !signedIn,
+  };
 }

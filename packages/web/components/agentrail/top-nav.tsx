@@ -54,12 +54,16 @@ export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 export function TopNav({
   activeTab,
   onTabChange,
+  signedIn,
   connectedAddress,
   onConnectWallet,
   onDisconnectWallet,
 }: {
   activeTab: TabId
   onTabChange: (tab: TabId) => void
+  /// Signed in, which is separate from holding a wallet: someone who signed in
+  /// with an email owns agents and hires with them without ever having one.
+  signedIn: boolean
   connectedAddress: `0x${string}` | null
   onConnectWallet: () => void
   onDisconnectWallet: () => void
@@ -106,30 +110,28 @@ export function TopNav({
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
                 <span className="relative inline-flex size-2 rounded-full bg-success" />
               </span>
-              Hardhat Local
-              <span className="font-mono text-success/80">Chain 31337</span>
+              {CHAIN_NAME}
+              <span className="font-mono text-success/80">Chain {CHAIN_ID}</span>
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            {connectedAddress ? (
+            {signedIn ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
                   onClick={() => setDropdownOpen((prev) => !prev)}
                   className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <img
-                    src="/MetaMask-icon-fox-with-margins.svg"
-                    alt="MetaMask"
-                    className="size-4 shrink-0"
-                  />
+                  <Wallet className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <span className="font-mono text-sm text-foreground">
-                    {truncateHex(connectedAddress, 6, 4)}
+                    {connectedAddress ? truncateHex(connectedAddress, 6, 4) : 'Signed in'}
                   </span>
-                  <span className="hidden rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
-                    {walletStatus.isRegisteredAgent ? 'Registered agent' : 'Observer'}
-                  </span>
+                  {connectedAddress && (
+                    <span className="hidden rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
+                      {walletStatus.isRegisteredAgent ? 'Registered agent' : 'Observer'}
+                    </span>
+                  )}
                   <ChevronDown
                     className={cn(
                       'size-3.5 text-muted-foreground transition-transform',
@@ -144,14 +146,15 @@ export function TopNav({
                   <div className="absolute right-0 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-xl z-50">
                     <div className="border-b border-border/80 pb-2.5 mb-2.5">
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-                        Connected Account
+                        {connectedAddress ? 'Connected Account' : 'Signed In'}
                       </p>
                       <div className="flex items-center justify-between gap-2 mt-1">
                         <code className="truncate font-mono text-xs text-foreground">
-                          {connectedAddress}
+                          {connectedAddress ?? 'No wallet linked'}
                         </code>
                         <button
                           type="button"
+                          disabled={!connectedAddress}
                           onClick={handleCopy}
                           title="Copy address"
                           className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-secondary/50 text-muted-foreground transition-colors hover:text-foreground"
@@ -166,6 +169,7 @@ export function TopNav({
                     </div>
 
                     <div className="space-y-1">
+                      {connectedAddress && (
                       <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
                         <span>USDC</span>
                         <span className="font-medium text-foreground tabular-nums">
@@ -174,13 +178,16 @@ export function TopNav({
                             : '—'}
                         </span>
                       </div>
+                      )}
 
                       <p className="px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                        {walletStatus.agentName
-                          ? `This address is the agent "${walletStatus.agentName}".`
-                          : walletStatus.isRegisteredAgent
-                            ? 'This address holds an identity token but no agent is running for it.'
-                            : 'Agents hold their own accounts and sign their own transactions, so nothing here is spent on your behalf.'}
+                        {!connectedAddress
+                          ? 'Your agents hold their own accounts and pay their own gas, so hiring one needs no wallet of your own.'
+                          : walletStatus.agentName
+                            ? `This address is the agent "${walletStatus.agentName}".`
+                            : walletStatus.isRegisteredAgent
+                              ? 'This address holds an identity token but no agent is running for it.'
+                              : 'Agents hold their own accounts and sign their own transactions, so nothing here is spent on your behalf.'}
                       </p>
 
                       <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
@@ -200,7 +207,7 @@ export function TopNav({
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
                       >
                         <LogOut className="size-3.5" />
-                        Disconnect Wallet
+                        Sign out
                       </button>
                     </div>
                   </div>
@@ -213,7 +220,7 @@ export function TopNav({
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Wallet className="size-4" aria-hidden="true" />
-                Connect Wallet
+                Sign in
               </button>
             )}
 

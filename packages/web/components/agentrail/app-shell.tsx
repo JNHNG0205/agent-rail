@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { TopNav, type TabId } from './top-nav'
-import { ConnectWalletModal } from './connect-wallet-modal'
+import { useSession } from '@/lib/session'
 import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
@@ -12,17 +12,19 @@ import { cn } from '@/lib/utils'
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>('assistant')
-  const [connectedAddress, setConnectedAddress] = useState<`0x${string}` | null>(null)
-  const [connectOpen, setConnectOpen] = useState(false)
+  // Sign-in state lives in the session, not here: it has to survive a reload,
+  // and a component holding it would sign the user out on every refresh.
+  const { signedIn, address, signIn, signOut } = useSession()
 
   return (
     <div className="min-h-dvh bg-background">
       <TopNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        connectedAddress={connectedAddress}
-        onConnectWallet={() => setConnectOpen(true)}
-        onDisconnectWallet={() => setConnectedAddress(null)}
+        signedIn={signedIn}
+        connectedAddress={address}
+        onConnectWallet={signIn}
+        onDisconnectWallet={() => void signOut()}
       />
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -42,12 +44,6 @@ export function AppShell() {
           <EvaluatorView />
         </div>
       </main>
-
-      <ConnectWalletModal
-        open={connectOpen}
-        onClose={() => setConnectOpen(false)}
-        onConnect={(addr) => setConnectedAddress(addr)}
-      />
 
     </div>
   )

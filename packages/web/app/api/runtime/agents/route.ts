@@ -28,7 +28,14 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "body must be JSON" }, { status: 400 });
   }
-  const owner = await ownerOf(request);
+  let owner: string | null;
+  try {
+    owner = await ownerOf(request);
+  } catch {
+    // The caller presented a token that did not hold up. Distinct from 403:
+    // nothing is known about who they are, so signing in again is the fix.
+    return NextResponse.json({ error: "sign in again" }, { status: 401 });
+  }
   const result = await proxy("/agents", { method: "POST", body, owner });
   return NextResponse.json(result.body, { status: result.status });
 }

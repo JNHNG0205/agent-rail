@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/ui/button";
+import { useAuthedFetch } from "@/lib/session";
 
 /// Create a provider agent — one that sells a service to other agents. Member 4.
 ///
@@ -31,6 +32,7 @@ interface Props {
 type Stage = "describe" | "confirm" | "working" | "done";
 
 export function CreateProviderModal({ open, onClose, onCreated }: Props) {
+  const authedFetch = useAuthedFetch();
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [offer, setOffer] = useState<ServiceOffer | null>(null);
@@ -86,7 +88,9 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
     setError(null);
     setStage("working");
     try {
-      const res = await fetch("/api/runtime/agents", {
+      // Authed: an agent created without an owner belongs to everyone, which
+      // means anyone could hire with it and spend its balance.
+      const res = await authedFetch("/api/runtime/agents", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, role: "provider", service: offer }),

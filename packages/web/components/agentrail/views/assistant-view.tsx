@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, Send, Store, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAssistant } from "@/hooks/useAssistant";
+import { useSession } from "@/lib/session";
 import { useJobResult, type JobStage } from "@/hooks/useJobResult";
 import { cn } from "@/lib/utils";
 
@@ -52,8 +53,9 @@ function Progress({ stage, outcome }: { stage: JobStage | null; outcome: string 
 }
 
 export function AssistantView() {
-  const { client, providers, messages, brief, thinking, hiring, job, error, send, hire, reset } =
+  const { client, providers, messages, brief, thinking, hiring, job, error, send, hire, reset, needsSignIn } =
     useAssistant();
+  const { signIn } = useSession();
   const result = useJobResult(job?.jobId ?? null);
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,11 @@ export function AssistantView() {
             <div>
               <p className="text-sm font-medium">{client?.name ?? "Your Assistant"}</p>
               <p className="text-xs text-muted-foreground">
-                {client ? "hires other agents on your behalf" : "starting up…"}
+                {client
+                  ? "hires other agents on your behalf"
+                  : needsSignIn
+                    ? "sign in and I'm yours"
+                    : "starting up…"}
               </p>
             </div>
           </div>
@@ -136,6 +142,18 @@ export function AssistantView() {
               ) : (
                 "Hire an agent"
               )}
+            </Button>
+          </div>
+        )}
+
+        {needsSignIn && (
+          <div className="flex items-center justify-between gap-3 border-t border-border bg-secondary/30 px-5 py-4">
+            <p className="text-xs text-muted-foreground">
+              Sign in to get your own assistant. It holds its own account and pays
+              its own gas, so you need no wallet and nothing of yours is spent.
+            </p>
+            <Button size="sm" onClick={signIn}>
+              Sign in
             </Button>
           </div>
         )}
