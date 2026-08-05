@@ -71,10 +71,26 @@ export function truncateHex(hex?: string, start = 6, end = 4): string {
   return `${hex.slice(0, start)}...${hex.slice(-end)}`;
 }
 
+/// An amount as a person reads it: two decimal places, no unit.
+///
+/// Display only. Six decimals is what USDC stores and what the chain moves, and
+/// it is right for a hash or a receipt and wrong for a balance someone is
+/// scanning — "7.50" is the number they think in.
+///
+/// It deliberately does NOT append "USDC". It used to, and the unit then
+/// appeared twice wherever a caller added its own; worse, two places passed the
+/// result back as a transaction amount, where a trailing " USDC" is rejected by
+/// parseUsdc and a rounded figure would quietly move less money than intended.
+/// Anything that feeds a value back into a transaction must use the exact
+/// six-decimal formatter from shared, never this one.
 export function formatUsdc(amount?: number | bigint): string {
-  if (amount === undefined) return "$0.00 USDC";
-  if (typeof amount === "bigint") {
-    return `${sharedFormatUsdc(amount)} USDC`;
-  }
-  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USDC`;
+  if (amount === undefined) return "0.00";
+  const minorUnits = typeof amount === "bigint" ? amount : BigInt(Math.round(amount * 1e6));
+  // Truncated, never rounded. Rounding 0.999999 to "1.00" shows a balance
+  // larger than the one that exists, and an amount displayed as more than it is
+  // is the one direction this must never move. Truncation can only ever
+  // understate, which is safe: the exact figure is a click away and the money
+  // itself is untouched — only the number of places shown changes.
+  const cents = minorUnits / 10_000n;
+  return `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}`;
 }

@@ -344,7 +344,7 @@ export function JobsView() {
             <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-3 font-medium">Job ID</th>
               <th className="px-4 py-3 font-medium">Parties</th>
-              <th className="px-4 py-3 font-medium">Amount</th>
+              <th className="px-4 py-3 font-medium">Amount (USDC)</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Created</th>
               <th className="px-4 py-3" />
@@ -407,7 +407,7 @@ export function JobsView() {
             </p>
             <div className="mt-2 flex items-center justify-between">
               <span className="font-mono text-sm font-semibold text-foreground">
-                {formatUsdc(job.amount)}
+                {formatUsdc(job.amount)} USDC
               </span>
               <span className="text-xs text-muted-foreground">
                 {job.createdAt}

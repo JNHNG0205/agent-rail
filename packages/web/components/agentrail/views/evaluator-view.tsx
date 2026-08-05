@@ -113,7 +113,7 @@ export function EvaluatorView() {
                   <div className="leading-tight">
                     <p className="text-sm font-medium">Job #{String(job.id)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {agentLabel(job.provider)} · {formatUsdc(BigInt(job.amount))}
+                      {agentLabel(job.provider)} · {formatUsdc(BigInt(job.amount))} USDC
                     </p>
                   </div>
                 </div>

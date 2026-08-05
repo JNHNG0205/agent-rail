@@ -86,7 +86,7 @@ export function AgentCard({
 
         <Field label="USDC Balance">
           <p className="font-mono text-xl font-semibold tabular-nums text-foreground">
-            {agent.usdcBalance !== undefined ? formatUsdc(agent.usdcBalance) : '—'}
+            {agent.usdcBalance !== undefined ? `${formatUsdc(agent.usdcBalance)} USDC` : '—'}
           </p>
         </Field>
       </div>

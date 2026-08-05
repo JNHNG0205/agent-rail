@@ -6,6 +6,7 @@ import { AgentCard } from '@/components/agentrail/agent-card'
 import { JobEscrowManager } from '@/components/agentrail/job-escrow-manager'
 import { EventFeed } from '@/components/agentrail/event-feed'
 import { formatUsdc, type Agent } from '@/lib/agentrail-data'
+import { formatUsdc as exactUsdc } from '@agentrail/shared'
 import { useRegistry } from '@/hooks/useRegistry'
 import { useJobs } from '@/hooks/useJobs'
 import { useSession, useAuthedFetch } from '@/lib/session'
@@ -71,7 +72,10 @@ export function DashboardView() {
       const res = await authedFetch(`/api/runtime/agents/${agent.id}/withdraw`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ to: address, amountUsdc: formatUsdc(agent.usdcBalance) }),
+        // exactUsdc, not the display format: this is the amount that moves.
+        // The rounded one would leave fractions behind, and it carries a
+        // " USDC" suffix that parseUsdc rejects outright.
+        body: JSON.stringify({ to: address, amountUsdc: exactUsdc(agent.usdcBalance) }),
       })
       const body = (await res.json()) as { error?: string; amount?: string }
       if (body.error) throw new Error(body.error)
@@ -108,7 +112,7 @@ export function DashboardView() {
           <Metric
             icon={<Wallet className="size-5" aria-hidden="true" />}
             label="In Escrow Now"
-            value={formatUsdc(totalEscrowUsdc)}
+            value={`${formatUsdc(totalEscrowUsdc)} USDC`}
           />
           <Metric
             icon={<Activity className="size-5" aria-hidden="true" />}
