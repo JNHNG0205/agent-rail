@@ -24,7 +24,7 @@ factory those depend on exists on a local Hardhat node.
 5. [Running the system](#5-running-the-system)
 6. [Walkthrough](#6-walkthrough)
 7. [System features](#7-system-features)
-8. [Architecture](#8-architecture)
+8. [Components](#8-components)
 9. [Troubleshooting](#9-troubleshooting)
 
 ---
@@ -472,28 +472,181 @@ history without ever showing a job in the wrong state.
 
 ---
 
-## 8. Architecture
+## 8. Components
 
 ```
 packages/
-  contracts/   JobContract, EvaluatorModule, IdentityRegistry,
-               ReputationRegistry, MockUSDC · deploy + seed · tests
-  shared/      ABIs, deployed addresses, shared types + constants
-  web/         Next.js app, API routes, Privy sign-in
-  agents/      runtime/  hosts every agent a user creates
-               provider/ does the work a provider was hired for
-               agent-c/  the independent evaluator
+  contracts/   the rules, on chain
+  shared/      ABIs, addresses, types — the only bridge from contracts to code
+  agents/      runtime (hosts agents) · provider (does the work) · agent-c (judges)
   indexer/     Ponder: chain events → PostgreSQL
-scripts/       dev.sh, demo-reset.sh, preflight.ts
+  web/         Next.js app and its API routes
+scripts/       dev.sh, demo-reset.sh, preflight.ts, new-accounts.ts
 ```
 
-`shared` is the only bridge between the contracts and their consumers. Two
-PostgreSQL schemas are kept apart deliberately: Ponder owns `public` and
-rebuilds it, while the runtime's agent keys and delivered work live in
-`runtime`, which nothing else may drop — an identity token is soulbound, so a
-lost key orphans that registration permanently.
+### 8.1 Smart contracts
 
-Full design in [`agentrail-architecture.md`](./agentrail-architecture.md).
+**`JobContract`** — the job lifecycle and the escrow. It holds the USDC and is
+the only thing that can move it.
+
+| Function | Who may call it |
+|---|---|
+| `createJob(provider, evaluator, amount)` | a registered client |
+| `fundJob(jobId)` | the client — pulls the USDC into escrow |
+| `submitDeliverable(jobId, hash)` | the provider |
+| `settle(jobId)` | **only `EvaluatorModule`** |
+| `cancel(jobId)` | the client, or the module on rejection |
+| `claimTimeout(jobId)` | the provider, past the deadline |
+
+Four states — `Open → Funded → Submitted → Terminal` — and every transition
+emits an event, because the indexer and the interface both depend on them:
+`JobCreated`, `JobFunded`, `DeliverableSubmitted`, `JobCompleted`,
+`JobCancelled`, `JobTimeoutClaimed`.
+
+Two guards matter more than the rest. `settle` is restricted to the evaluator
+module, so no client can release its own escrow. And `createJob` rejects an
+unregistered participant with `NotRegistered`, so a job cannot be opened between
+parties with no on-chain identity.
+
+**`EvaluatorModule`** — the only route to settlement. `submitApproval(jobId,
+deliverableHash, approved, signature)` recovers the signer from an EIP-191
+signature and compares it to the job's evaluator, reverting with
+`NotAuthorizedEvaluator` otherwise. It also checks the hash it was given against
+the one the provider committed, reverting with `DeliverableMismatch` — so a
+verdict cannot be replayed against different work. On approval it calls
+`settle`; on rejection, `cancel`.
+
+This is why the evaluator is a plain EOA rather than a smart account: recovery
+returns the key that signed, and a smart account signs per ERC-1271 with no key
+to recover.
+
+**`IdentityRegistry`** — an ERC-721 that permits minting and nothing else.
+`registerAgent(address)` mints one token per agent; `approve` and
+`setApprovalForAll` are overridden to revert, and `_update` rejects every
+transfer and burn with `Soulbound()`. An identity cannot be sold, so reputation
+cannot be bought.
+
+**`ReputationRegistry`** — a counter. `recordCompletion(agent)` is restricted to
+`JobContract`, so reputation can only be earned by a settled job, never written
+directly.
+
+**`MockUSDC`** — see 8.2.
+
+### 8.2 Why MockUSDC
+
+Payments are denominated in USDC, and the contract used here is a mock: an
+ERC-20 with `decimals()` fixed at **6**, matching real USDC, and an unrestricted
+`mint`.
+
+It exists for three reasons.
+
+**Real USDC cannot be obtained on a testnet in a way a marker can reproduce.**
+Circle does issue a Base Sepolia USDC, but acquiring it depends on faucets that
+rate-limit, require accounts, or stop working. A demonstration that cannot be
+run again next week is not a demonstration. `MockUSDC.mint` means every agent
+starts funded, every time, with no external dependency.
+
+**Nothing in the system depends on which ERC-20 it is.** `JobContract` holds an
+`IERC20` and calls `transfer` and `transferFrom`. Escrow, settlement, refunds
+and the timeout claim would behave identically against Circle's contract —
+switching is one address in `deployments.ts` and a redeploy. Using a mock costs
+no fidelity in the part being assessed.
+
+**The 6 decimals are the part that had to be real.** USDC is not an 18-decimal
+token, and money handled at 6 decimals is where rounding bugs live. Keeping the
+same precision means the arithmetic in this codebase is the arithmetic a real
+deployment would need — every amount is a `bigint` in integer minor units, never
+a float, and `parseUsdc` refuses anything it cannot represent exactly.
+
+**What is deliberately not realistic** is the unrestricted `mint`. Anyone can
+mint any amount, which is why the treasury's ETH is the only scarce resource
+here. On a real network that function would be a critical vulnerability; in a
+test token it is the faucet. It is worth stating rather than hoping nobody
+notices, because it is the first thing an examiner should ask about.
+
+### 8.3 The agent runtime (`packages/agents/src/runtime`)
+
+A single Node service that hosts every agent a user creates. It holds their
+private keys, so it is never exposed to a browser — the web application proxies
+to it through its own API routes, behind a shared secret.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /agents` | the public directory — who exists, what they sell |
+| `POST /agents` | create and onboard a provider |
+| `POST /agents/assistant` | the caller's own client agent, created on first sign-in |
+| `POST /agents/preview` | propose a service from a plain-language purpose |
+| `POST /agents/:id/chat` | talk to your agent until it has a brief |
+| `POST /agents/:id/hire` | choose a provider and commission it |
+| `GET /agents/:id/balance` | what an agent holds |
+| `POST /agents/:id/withdraw` | send its earnings to a verified wallet |
+| `POST /wallet/gas` | gas for a user's first deposit |
+
+Its parts: `store` (agent records, keys, ownership), `chat` (conversation to
+brief), `offer` (purpose to gradeable terms), `hire` (createJob → approve →
+fundJob as one user operation), `worker` (watches `JobFunded`, produces the work,
+submits the hash), `claim` (`claimTimeout` for deliveries nobody judged), and
+`work` (briefs and deliverables, persisted).
+
+### 8.4 The provider (`packages/agents/src/provider`)
+
+Does the work a provider was hired for. It is told what it sells by its own
+published summary, which is what makes one agent a designer and another a
+copywriter. Output is validated by declared kind — `svg` is additionally checked
+for scripts, event handlers, `foreignObject` and remote references, and refused
+rather than sanitised, because the bytes that are hashed, judged and displayed
+must be identical.
+
+### 8.5 The evaluator (`packages/agents/src/agent-c`)
+
+A separate process, deliberately. It watches `DeliverableSubmitted`, fetches the
+bytes from the provider, **re-derives the keccak256 hash and refuses a mismatch
+before spending a token on judging**, grades the work against the published
+requirements, signs the verdict and submits it to `EvaluatorModule`.
+
+It also sweeps on startup for jobs submitted while it was down. If it is not
+running, jobs stay at `Submitted` until a provider claims the timeout — which is
+the system behaving correctly, and looks exactly like it being broken.
+
+### 8.6 The indexer (`packages/indexer`)
+
+Ponder subscribes to every event from all five contracts and writes them into
+PostgreSQL: `agent`, `job`, `event` and `transfer` tables. It exists because the
+chain is queryable but not searchable — "every job this agent ever took, in
+order, with amounts" is one SQL query and an unbounded number of RPC calls.
+
+It also computes what the chain does not record. `Terminal` collapses settled,
+refunded and timed-out into one state; the indexer keeps them apart as
+`outcome`, derived from which event fired.
+
+It reads from the public RPC endpoint, separately from the agents (section 2.1).
+
+### 8.7 PostgreSQL, in two schemas
+
+| Schema | Owner | Contents | Survives a reset |
+|---|---|---|---|
+| `public` | Ponder | indexed chain history | no — rebuilt from the chain |
+| `runtime` | the agent runtime | agent records, **private keys**, briefs, deliverables | must |
+
+The split is load-bearing. Ponder drops and rebuilds its schema on a
+configuration change. An identity token is soulbound, so an agent's address is
+permanent and losing its key orphans that registration forever — sharing one
+schema would destroy agents as a side effect of reindexing.
+
+`runtime.job_work` holds each brief and deliverable because the chain stores
+only a hash. Losing a deliverable does not fail a job — settlement runs on the
+hash — so the provider is paid and the client has nothing, and no timeout
+recovers it.
+
+### 8.8 The web application (`packages/web`)
+
+Next.js App Router. Its API routes are the only thing that touches PostgreSQL or
+the agent runtime; client components never do. `lib/owner.ts` is the single place
+a caller's identity is established, and `lib/privy.ts` verifies Privy's ES256
+tokens using `node:crypto` against Privy's published key.
+
+Anything being actively watched reads the chain directly; lists and history read
+the indexer.
 
 ### Deployed contracts
 
@@ -505,7 +658,8 @@ Full design in [`agentrail-architecture.md`](./agentrail-architecture.md).
 | EvaluatorModule | `0x3746212a4cbd9dac7e17353b5d9fb6f4249b6098` |
 | MockUSDC | `0xed0d926e3b804cf3cbbc497a04e2e7a0669c4da1` |
 
-All five verified on Basescan and Blockscout.
+All five verified on Basescan and Blockscout. Full design rationale in
+[`agentrail-architecture.md`](./agentrail-architecture.md).
 
 ---
 
