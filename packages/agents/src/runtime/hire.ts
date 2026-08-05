@@ -4,6 +4,7 @@ import {
   JobContractAbi,
   MockUSDCAbi,
   formatUsdc,
+  parseUsdc,
   type JobBrief,
 } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
@@ -63,7 +64,9 @@ export async function hire(opts: {
   const provider = await getAgent(opts.providerId);
   if (!provider?.service) throw new Error(`no provider "${opts.providerId}"`);
 
-  const amount = BigInt(Math.round(Number(provider.service.priceUsdc) * 1e6));
+  // parseUsdc, not Number: money is integer arithmetic, and a float cannot
+  // hold every 6-decimal value exactly.
+  const amount = parseUsdc(provider.service.priceUsdc);
   const brief: JobBrief = { ...opts.brief, requirements: provider.service.requirements };
 
   const client = await accountOf(clientRecord);

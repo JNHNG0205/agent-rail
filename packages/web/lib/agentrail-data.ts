@@ -23,6 +23,10 @@ export const JOB_STEPS: JobStep[] = ["Open", "Funded", "Submitted", "Terminal"];
 /// real state worth being able to see.
 export interface Agent {
   address: `0x${string}`;
+  /// The runtime's id for this agent, when the runtime hosts it. Absent for a
+  /// registration that exists on chain with nobody running it — which is also
+  /// exactly when it cannot be acted on.
+  id?: string;
   /// Short label for display. From the runtime where it hosts the agent, else
   /// agentLabel() for the seeded three, else a truncated address.
   label: string;

@@ -54,6 +54,26 @@ export const JOB_TIMEOUT_BLOCKS = 100;
 
 /// Format USDC minor units (bigint) to a human string. Never route the raw
 /// value through Number before scaling — 6-decimal money must stay integer.
+/// A decimal USDC string to minor units.
+///
+/// Never through Number: a float cannot hold every 6-decimal value exactly, and
+/// the error lands in money. `Number("0.07") * 1e6` is 70000.00000000001, which
+/// rounds back only because the amounts here are small — that is luck, not a
+/// property. This splits on the point and does integer arithmetic.
+///
+/// Throws rather than coercing. A price that cannot be represented is a
+/// mistake worth surfacing where it is written, not silently truncated into an
+/// escrow amount.
+export function parseUsdc(value: string): bigint {
+  if (!/^\d+(\.\d{1,6})?$/.test(value)) {
+    throw new Error(
+      `"${value}" is not a USDC amount — expected a positive decimal with at most ${USDC_DECIMALS} places`,
+    );
+  }
+  const [whole, frac = ""] = value.split(".");
+  return BigInt(whole!) * 10n ** BigInt(USDC_DECIMALS) + BigInt(frac.padEnd(USDC_DECIMALS, "0"));
+}
+
 export function formatUsdc(minorUnits: bigint): string {
   const base = 10n ** BigInt(USDC_DECIMALS);
   const whole = minorUnits / base;

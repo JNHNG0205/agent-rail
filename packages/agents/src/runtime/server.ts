@@ -1,6 +1,11 @@
 import { createServer, type Server, type IncomingMessage } from "node:http";
-import { isDeliverableKind, type JobBrief } from "@agentrail/shared";
+import {
+  isDeliverableKind,
+  parseUsdc,
+  type JobBrief,
+} from "@agentrail/shared";
 import { getCommission, getDeliverable, rememberCommission } from "./work.js";
+import { balanceOf, withdraw } from "./withdraw.js";
 import { addresses } from "@agentrail/shared";
 import {
   createAgent,
@@ -250,6 +255,72 @@ export function startRuntime(): Promise<Server> {
         console.log(`[runtime] created ${record.role} "${record.name}" (${record.id})`);
         console.log(`[runtime]   ${await describe(account)}`);
         json(201, toPublic(record));
+        return;
+      }
+
+
+      // POST /agents/:id/withdraw — take an agent's earnings to a wallet.
+      //
+      // The destination is supplied by the caller and NOT trusted here: the web
+      // layer proves it is a wallet Privy signed for before forwarding. The
+      // runtime is not reachable from a browser, and this endpoint is behind the
+      // same shared secret as the rest of it.
+      if (method === "POST" && parts.length === 3 && parts[0] === "agents" && parts[2] === "withdraw") {
+        const agent = await getAgent(parts[1]!);
+        if (!agent) {
+          json(404, { error: `no agent "${parts[1]}"` });
+          return;
+        }
+        if (!mayActAs(agent, callerOwner(req))) {
+          json(403, { error: `"${agent.name}" belongs to someone else` });
+          return;
+        }
+
+        const body: unknown = JSON.parse(await readBody(req));
+        const b = body as { to?: unknown; amountUsdc?: unknown };
+        if (typeof b.to !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(b.to)) {
+          json(400, { error: "to must be an address" });
+          return;
+        }
+        if (typeof b.amountUsdc !== "string") {
+          json(400, { error: "amountUsdc must be a string" });
+          return;
+        }
+
+        let amount: bigint;
+        try {
+          amount = parseUsdc(b.amountUsdc);
+        } catch (err) {
+          json(400, { error: err instanceof Error ? err.message : "bad amount" });
+          return;
+        }
+
+        try {
+          const result = await withdraw({
+            agentId: agent.id,
+            to: b.to as `0x${string}`,
+            amount,
+          });
+          json(200, {
+            txHash: result.txHash,
+            amount: result.amount.toString(),
+            to: result.to,
+            remaining: result.remaining.toString(),
+          });
+        } catch (err) {
+          json(400, { error: err instanceof Error ? err.message : "withdrawal failed" });
+        }
+        return;
+      }
+
+      // GET /agents/:id/balance — what it holds, so a person knows what to take.
+      if (method === "GET" && parts.length === 3 && parts[0] === "agents" && parts[2] === "balance") {
+        const agent = await getAgent(parts[1]!);
+        if (!agent) {
+          json(404, { error: `no agent "${parts[1]}"` });
+          return;
+        }
+        json(200, { balanceUsdc: (await balanceOf(agent.id)).toString() });
         return;
       }
 

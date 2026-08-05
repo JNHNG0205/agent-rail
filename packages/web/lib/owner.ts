@@ -1,4 +1,4 @@
-import { verifyAccessToken } from "./privy";
+import { verifyAccessToken, verifyIdentityToken, type LinkedWallet } from "./privy";
 
 /// Who this request is from.
 ///
@@ -15,10 +15,50 @@ import { verifyAccessToken } from "./privy";
 
 export class UnauthorizedError extends Error {}
 
+/// Raised when an action needs to know a user's wallets and cannot.
+export class NoVerifiedWalletError extends Error {}
+
 function appId(): string {
   // Read per call, not at module load: a value captured at import time is
   // whatever the process started with, which makes tests depend on load order.
   return process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
+}
+
+/// Privy sends the identity token as a cookie, and as a header for clients that
+/// cannot use cookies. Both are read because a same-origin fetch carries the
+/// cookie while a server-to-server hop does not.
+function identityToken(request: Request): string | null {
+  const header = request.headers.get("privy-id-token");
+  if (header) return header;
+  const cookie = request.headers.get("cookie");
+  if (!cookie) return null;
+  const match = /(?:^|;\s*)privy-id-token=([^;]+)/.exec(cookie);
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
+/// The wallets Privy says this user has linked, verified.
+///
+/// The only acceptable source of a withdrawal destination. An address from a
+/// request body is whatever the page sent, and a transfer cannot be undone — so
+/// this refuses rather than falling back when it cannot establish one.
+export async function verifiedWalletsOf(request: Request): Promise<LinkedWallet[]> {
+  const id = appId();
+  if (!id) {
+    // Development, with no Privy app. Nothing can be verified, so nothing is
+    // claimed — a caller must decide whether to allow the action at all.
+    return [];
+  }
+  const token = identityToken(request);
+  if (!token) {
+    throw new NoVerifiedWalletError(
+      "no identity token — enable “Return user data in an identity token” in Privy",
+    );
+  }
+  try {
+    return (await verifyIdentityToken(token, id)).wallets;
+  } catch (err) {
+    throw new UnauthorizedError(err instanceof Error ? err.message : "invalid identity token");
+  }
 }
 
 function bearerToken(request: Request): string | null {

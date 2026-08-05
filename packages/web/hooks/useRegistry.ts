@@ -83,6 +83,7 @@ export function useRegistry() {
         const key = h.address.toLowerCase();
         const existing = byAddress.get(key);
         byAddress.set(key, {
+          id: h.id,
           address: h.address,
           label: h.name,
           name: h.name,

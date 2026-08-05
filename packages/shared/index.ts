@@ -39,6 +39,7 @@ export {
   USDC_DECIMALS,
   JOB_TIMEOUT_BLOCKS,
   formatUsdc,
+  parseUsdc,
 } from "./src/constants";
 export {
   ZERO_ADDRESS,

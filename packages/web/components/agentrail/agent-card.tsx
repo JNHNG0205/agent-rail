@@ -1,4 +1,4 @@
-import { BadgeCheck, Bot, Store } from 'lucide-react'
+import { ArrowUpRight, BadgeCheck, Bot, Store } from 'lucide-react'
 import { type Agent, formatUsdc, truncateHex } from '@/lib/agentrail-data'
 import { CopyButton } from './copy-button'
 import { cn } from '@/lib/utils'
@@ -35,6 +35,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function AgentCard({
   agent,
   showIdentity = true,
+  onWithdraw,
 }: {
   agent: Agent
   /// The identity token id and the agent's address. True in the registry, where
@@ -42,6 +43,9 @@ export function AgentCard({
   /// answers "what do I have and what is it doing" — nobody sends funds to an
   /// agent by hand, so an address there is a number to scroll past.
   showIdentity?: boolean
+  /// Offered only where the agent is the viewer's own. Absent in the public
+  /// registry, where the balances belong to other people.
+  onWithdraw?: (agent: Agent) => void
 }) {
   return (
     <article className="rounded-2xl border border-border bg-card p-5">
@@ -83,6 +87,19 @@ export function AgentCard({
           </p>
         </Field>
       </div>
+
+      {/* Only on your own agents, and only when there is something to take.
+          What an agent earned is otherwise visible and unreachable. */}
+      {onWithdraw && agent.usdcBalance !== undefined && agent.usdcBalance > 0n && (
+        <button
+          type="button"
+          onClick={() => onWithdraw(agent)}
+          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowUpRight className="size-3.5" aria-hidden="true" />
+          Withdraw to my wallet
+        </button>
+      )}
 
       {agent.service && (
         <div className="mt-4 rounded-xl border border-border bg-secondary/40 p-3">

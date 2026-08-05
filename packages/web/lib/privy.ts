@@ -49,17 +49,22 @@ function decodeSegment(segment: string): unknown {
 /// never to exp, where leeway would mean honouring a token past its expiry.
 const CLOCK_SKEW_SECONDS = 60;
 
-/// Check a token against a known set of keys, and return the user's DID.
+/// Check a token against a known set of keys and return its verified claims.
 ///
 /// Separated from fetching so the rules can be tested against forged tokens
 /// without a network. Throws rather than returning null: every rejection has a
 /// distinct reason and losing it makes a failure impossible to diagnose.
-export function verifyWithKeys(
+///
+/// Both Privy tokens are checked here. They differ only in what they carry —
+/// the access token proves who is asking, the identity token also lists the
+/// accounts they have linked — so the signature and claim rules must not be
+/// written twice and drift apart.
+export function verifyClaimsWithKeys(
   token: string,
   keys: JsonWebKey[],
   appId: string,
   nowSeconds: number,
-): string {
+): JwtClaims & Record<string, unknown> {
   const parts = token.split(".");
   if (parts.length !== 3) throw new TokenError("not a JWT");
   const [headerPart, payloadPart, signaturePart] = parts as [string, string, string];
@@ -114,7 +119,57 @@ export function verifyWithKeys(
   }
 
   if (!claims.sub) throw new TokenError("token has no subject");
-  return claims.sub;
+  return claims as JwtClaims & Record<string, unknown>;
+}
+
+/// The user's DID from an access token.
+export function verifyWithKeys(
+  token: string,
+  keys: JsonWebKey[],
+  appId: string,
+  nowSeconds: number,
+): string {
+  return verifyClaimsWithKeys(token, keys, appId, nowSeconds).sub!;
+}
+
+/// A wallet the identity token says this user has linked.
+///
+/// Only wallets, and only their addresses. An identity token also carries
+/// emails, social accounts and custom metadata; none of that belongs in a
+/// withdrawal decision, and reading less means less to get wrong.
+export interface LinkedWallet {
+  address: `0x${string}`;
+}
+
+interface RawLinkedAccount {
+  type?: unknown;
+  address?: unknown;
+  chain_type?: unknown;
+}
+
+/// Pull the linked wallets out of verified identity-token claims.
+///
+/// `linked_accounts` arrives as a JSON string rather than an array — a JWT
+/// claim Privy stringifies — so it is parsed here and treated as untrusted
+/// shape even though the signature held: a valid token may still contain an
+/// account type this code has never seen.
+export function linkedWallets(claims: Record<string, unknown>): LinkedWallet[] {
+  const raw = claims.linked_accounts;
+  let accounts: unknown;
+  try {
+    accounts = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(accounts)) return [];
+
+  return accounts
+    .filter((a): a is RawLinkedAccount => typeof a === "object" && a !== null)
+    .filter((a) => a.type === "wallet" && (a.chain_type ?? "ethereum") === "ethereum")
+    .map((a) => a.address)
+    .filter((address): address is string => typeof address === "string")
+    .filter((address) => /^0x[0-9a-fA-F]{40}$/.test(address))
+    .map((address) => ({ address: address.toLowerCase() as `0x${string}` }));
 }
 
 interface CachedKeys {
@@ -149,19 +204,40 @@ export function resetKeyCache(): void {
   cache = undefined;
 }
 
-/// Verify a token against Privy's published keys, returning the user's DID.
-export async function verifyAccessToken(token: string, appId: string): Promise<string> {
+/// Verify a token against Privy's published keys, returning its claims.
+async function verifyAgainstPrivy(
+  token: string,
+  appId: string,
+): Promise<JwtClaims & Record<string, unknown>> {
   const now = Math.floor(Date.now() / 1000);
   const keys = await signingKeys(appId, false);
   try {
-    return verifyWithKeys(token, keys, appId, now);
+    return verifyClaimsWithKeys(token, keys, appId, now);
   } catch (err) {
     // A rotated-in key is unknown until the cache expires, so one miss earns a
     // refetch. Only for key selection: a token that fails on its claims would
     // fail identically against fresh keys.
     if (err instanceof TokenError && err.message.includes("kid")) {
-      return verifyWithKeys(token, await signingKeys(appId, true), appId, now);
+      return verifyClaimsWithKeys(token, await signingKeys(appId, true), appId, now);
     }
     throw err;
   }
+}
+
+/// The user's DID, from a verified access token.
+export async function verifyAccessToken(token: string, appId: string): Promise<string> {
+  return (await verifyAgainstPrivy(token, appId)).sub!;
+}
+
+/// The wallets a verified identity token says this user has linked.
+///
+/// This is the only acceptable source of a withdrawal destination. An address
+/// taken from a request body is whatever the page sent — a typo, or a swap by
+/// anything that can reach the browser — and a transfer cannot be undone.
+export async function verifyIdentityToken(
+  token: string,
+  appId: string,
+): Promise<{ userId: string; wallets: LinkedWallet[] }> {
+  const claims = await verifyAgainstPrivy(token, appId);
+  return { userId: claims.sub!, wallets: linkedWallets(claims) };
 }
