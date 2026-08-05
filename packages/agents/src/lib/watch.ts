@@ -40,8 +40,20 @@ export function watchEvents(opts: {
   /// only after an outage.
   maxBlockRange?: bigint;
 }): () => void {
-  const interval = opts.intervalMs ?? 2_000;
-  const maxRange = opts.maxBlockRange ?? 10n;
+  // Five seconds, not two. Two matched Base Sepolia's block time, which sounds
+  // right and buys nothing: a job takes thirty to ninety seconds end to end, so
+  // noticing an event three seconds later is invisible. What it cost was
+  // constant — two watchers in two processes, each polling independently, was
+  // 115 calls a minute doing nothing at all, and RPC quota is the resource this
+  // system actually runs out of.
+  const interval = Number(process.env.AGENT_POLL_MS ?? "") || 5_000;
+
+  // 10 was chosen for Alchemy's free tier, which rejects anything wider. Nothing
+  // here runs on Alchemy any more: the public Base endpoint allows 1000 and
+  // Infura 10,000. Keeping 10 meant catching up 500 blocks took 50 calls where
+  // one would do — the expensive shape, not the safe one. Still well inside
+  // every endpoint's cap, and overridable for one that is stricter.
+  const maxRange = opts.maxBlockRange ?? BigInt(Number(process.env.AGENT_LOG_RANGE ?? "") || 500);
   // Bound the work per tick so catching up cannot block the loop indefinitely;
   // whatever is left is picked up on the next one.
   const maxWindowsPerTick = 25;
