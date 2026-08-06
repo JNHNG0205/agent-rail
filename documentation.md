@@ -18,14 +18,13 @@ factory those depend on exists on a local Hardhat node.
 ## Contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Accounts and API keys](#2-accounts-and-api-keys)
-3. [Installation](#3-installation)
-4. [Configuration](#4-configuration)
-5. [Running the system](#5-running-the-system)
-6. [Walkthrough](#6-walkthrough)
-7. [System features](#7-system-features)
-8. [Components](#8-components)
-9. [Troubleshooting](#9-troubleshooting)
+2. [Setup, step by step](#2-setup-step-by-step)
+3. [Reference](#3-reference)
+4. [Running the system](#4-running-the-system)
+5. [Walkthrough](#5-walkthrough)
+6. [System features](#6-system-features)
+7. [Components](#7-components)
+8. [Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -45,183 +44,38 @@ You will also need the accounts in section 2. All of them have free tiers.
 
 ---
 
-## 2. Accounts and API keys
+## 2. Setup, step by step
 
-### 2.1 Infura — the RPC endpoint
+Every command below is run from the repository root, in this order. Roughly
+twenty minutes, most of it waiting on sign-ups and faucets.
 
-The agents need a private JSON-RPC endpoint. The public Base endpoint is not
-sufficient on its own: it does not implement `eth_sendUserOperation`, so no
-ERC-4337 agent can transact through it.
-
-1. Create a free account at <https://infura.io>.
-2. Create an API key and enable the **Base Sepolia** network on it.
-3. Copy the endpoint, of the form
-   `https://base-sepolia.infura.io/v3/<your-key>`.
-
-**Read this before running anything.** The free tier is a daily credit quota,
-and this system will exhaust it if misconfigured — two keys were emptied in two
-days during development before the cause was found. Three settings exist because
-of that, and undoing any of them brings the problem back:
-
-- The **indexer uses the public endpoint** (`BASE_SEPOLIA_INDEXER_RPC_URL`). It
-  only reads logs and blocks, so it never needed a private one, and sharing a
-  key between the indexer and the agents starves the agents.
-- The **browser never polls the chain**; it reads the indexer's database.
-  `watchContractEvent` over HTTP is not a subscription — it polls `eth_getLogs`
-  every few seconds, once per open tab.
-- The agents poll every **5 seconds**, not every block.
-
-Measured idle, the agents make about 52 requests a minute. Left running all day
-that is roughly 75,000 requests, which a free key sustains comfortably.
-
-### 2.2 OpenRouter — the language model
-
-Agents use an LLM to write briefs, produce deliverables and grade them.
-
-1. Create an account at <https://openrouter.ai>.
-2. Create an API key.
-3. Choose a model supporting **structured outputs**. The evaluator's verdict is
-   parsed, signed and settled on chain, so a malformed reply would strand an
-   escrow. `google/gemini-2.0-flash-001` works well and is inexpensive.
-
-Setting `LLM_PROVIDER=mock` instead runs the system with no API key and no model
-calls. Agents still transact, and every deliverable is a fixed stand-in. That is
-useful for checking the chain plumbing without spending anything, but it is not
-the system working — the marketplace is only meaningful when the agents actually
-write and grade.
-
-### 2.3 Privy — sign-in and wallets
-
-Privy provides sign-in and gives each user a wallet, including users who sign in
-with an email and have never held one.
-
-1. Create an app at <https://dashboard.privy.io>.
-2. Copy the **App ID** and **Client ID** from *App settings → Basics*.
-3. Under **Login methods**, enable **Email** and **Wallet**.
-4. Under **User management → Authentication → Advanced**, enable
-   **"Return user data in an identity token"**.
-
-Step 4 is required for deposits and withdrawals. That identity token is the only
-proof of which wallet belongs to the signed-in user, and the system refuses to
-send money to an address it cannot verify.
-
-Both identifiers are **public** and safe to commit — Privy puts the App ID in
-the audience of every token it issues. There is no app secret: tokens are
-verified against Privy's published key, so the one credential that would matter
-if leaked never exists in this repository.
-
-### 2.4 Testnet accounts
-
-The system uses five accounts. Generating them by hand in a wallet means a lot
-of clicking and a good chance of pasting the wrong key into the wrong file, so
-there is a command for it:
-
-```bash
-npm run accounts:new
-```
-
-It prints five accounts, says which three need funding, and gives the exact
-lines to paste into each file. It writes nothing — copy what you need and run it
-again if you lose the output.
-
-**These are throwaway testnet keys.** They are generated on your machine and
-printed to your terminal, which is fine for accounts holding faucet ETH and
-unacceptable for anything else. Never fund them on a real network.
-
-#### What each account is for
-
-**Two are required.** The rest are printed because they have uses, and none is
-needed to run the system.
-
-| Account | Required | Needs ETH | Role |
-|---|---|---|---|
-| **Agent C** | yes | ~0.05 | The evaluator. Signs every verdict. |
-| **Treasury** | yes | ~0.05 | Pays each new agent's first gas. |
-| Deployer | no | — | Only to deploy your own contracts (5.4) |
-| Agent A | no | — | Seed client from an earlier design |
-| Agent B | no | — | Seed provider from an earlier design |
-
-Agents A and B predate the marketplace. Users create their own agents now, and
-the treasury funds and registers each one, so nothing depends on the seeds.
-
-The separation is the design, not caution. The deployer owns `JobContract` and
-`ReputationRegistry`, and an owner can re-point the identity registry, the
-evaluator module and the reputation registry — an agent holding that key could
-rewrite the rules constraining its own job. The evaluator's key signs the
-verdict that releases money, so a client holding it could approve its own
-payment, which is the single thing this design exists to prevent.
-
-#### Funding the two accounts
-
-Any Base Sepolia faucet works. These need no prior balance and no Coinbase
-account:
-
-| Faucet | Amount | Notes |
-|---|---|---|
-| <https://faucet.quicknode.com/base/sepolia> | varies | no account needed |
-| <https://www.ethereum-ecosystem.com/faucets/base-sepolia> | 0.5 ETH / day | no sign-in |
-| <https://portal.cdp.coinbase.com/products/faucet> | 0.1 ETH / day | needs a free Coinbase Developer account |
-
-Paste each address in and claim. Some faucets — Alchemy's among them — require a
-balance on Ethereum mainnet before they will send anything; if you hit that,
-use one of the three above instead.
-
-0.05 ETH in each of the two is enough for a demonstration, and it is worth knowing
-what it buys rather than assuming it is unlimited. The treasury pays out:
-
-- **0.004 ETH per agent created** — every provider, and every new user's
-  assistant. 0.05 ETH funds about twelve of them.
-- **0.0008 ETH per deposit**, to cover gas for a wallet that has never held any.
-
-The deployer and the evaluator spend only their own transaction fees, which are
-small on Base Sepolia. If agent creation starts failing, the treasury is the
-first thing to check — `npm run preflight:base-sepolia` reports its balance.
-
-The USDC costs nothing by contrast: `MockUSDC.mint` is unrestricted, so the 1000
-USDC each new client receives is minted on demand and cannot run out. The ETH is
-the only finite resource here.
-
-#### Checking it worked
-
-```bash
-npm run preflight:base-sepolia
-```
-
-It reports each account's balance and whether it is registered, and refuses to
-start the system if something is missing — which is more useful than discovering
-it half way through a demo.
+You will need three free accounts — **Infura**, **OpenRouter** and **Privy** —
+and two throwaway testnet accounts that step 4 generates for you. What each is
+for is explained in section 3; this section is the sequence.
 
 ---
 
-## 3. Installation
+### Step 1 — Clone and install
 
 ```bash
 git clone <repository-url>
 cd agent-rail
-npm install          # installs every workspace — run at the root
-npm run db:up        # PostgreSQL in Docker
-npm run compile      # compile contracts, regenerate shared ABIs
+npm install
 ```
 
-`npm install` must run at the repository root. Installing inside a package
-creates a nested `node_modules` and breaks the workspace links.
+`npm install` must run at the root. Installing inside a package creates a nested
+`node_modules` and breaks the workspace links. Expect deprecation warnings from
+transitive dependencies — they are harmless, and it exits 0.
 
----
+### Step 2 — Start the database
 
-## 4. Configuration
+```bash
+npm run db:up
+```
 
-Four files, each read by exactly one consumer. **A value set in the wrong file
-is ignored**, which looks identical to it having no effect — the single easiest
-way to lose an hour on this project.
+PostgreSQL in Docker. Docker Desktop must be running.
 
-| File | Read by |
-|---|---|
-| `.env` | Hardhat (deploy, seed, verify) and `scripts/preflight.ts` |
-| `packages/agents/.env` | the agent runtime and the evaluator |
-| `packages/indexer/.env.local` | Ponder — it does **not** read `.env` |
-| `packages/web/.env` | Next.js |
-
-Copy the templates:
+### Step 3 — Copy the environment templates
 
 ```bash
 cp .env.example                        .env
@@ -230,68 +84,201 @@ cp packages/indexer/.env.local.example packages/indexer/.env.local
 cp packages/web/.env.example           packages/web/.env
 ```
 
-### `.env` — deployment and seeding
+Four files, each read by exactly one part of the system. Section 3 says which is
+which; the steps below tell you what to put where.
+
+### Step 4 — Create two testnet accounts
 
 ```bash
-BASE_SEPOLIA_RPC_URL=https://base-sepolia.infura.io/v3/<your-key>
-BASESCAN_API_KEY=                          # optional, for contract verification
-BASE_SEPOLIA_DEPLOYER_PRIVATE_KEY=0x...    # only if deploying your own
-BASE_SEPOLIA_AGENT_A_PRIVATE_KEY=0x...
-BASE_SEPOLIA_AGENT_B_PRIVATE_KEY=0x...
-BASE_SEPOLIA_AGENT_C_PRIVATE_KEY=0x...
+npm run accounts:new
 ```
 
-### `packages/agents/.env` — the runtime and the evaluator
+It prints accounts and the exact lines to paste. **Two matter:**
+
+- **Agent C** — the evaluator, which signs every verdict
+- **Treasury** — pays each new agent's first gas
+
+Paste the lines it shows under *"Paste into packages/agents/.env"* into
+`packages/agents/.env`, and the `BASE_SEPOLIA_AGENT_C_PRIVATE_KEY` line into
+`.env` as well.
+
+It also prints a deployer and two seed agents. **Ignore them** unless you intend
+to deploy your own contracts — the ones this repository points at are already
+deployed, and users create their own agents from the interface.
+
+The command writes nothing, so run it again if you lose the output. These are
+throwaway testnet keys printed to a terminal: never fund them on a real network.
+
+### Step 5 — Fund the two accounts
+
+Copy the two addresses the previous step printed into any Base Sepolia faucet.
+**0.05 ETH each is plenty.**
+
+| Faucet | Amount | Account needed |
+|---|---|---|
+| <https://faucet.quicknode.com/base/sepolia> | varies | none |
+| <https://www.ethereum-ecosystem.com/faucets/base-sepolia> | 0.5 ETH/day | none |
+| <https://portal.cdp.coinbase.com/products/faucet> | 0.1 ETH/day | free Coinbase Developer |
+
+Some faucets — Alchemy's among them — require a balance on Ethereum mainnet
+first. If you hit that, use one of the three above.
+
+### Step 6 — Get an Infura endpoint
+
+Create a free key at <https://infura.io> and enable **Base Sepolia** on it. Then
+put the same URL in **both** files:
 
 ```bash
-CHAIN_ID=84532
+# .env  and  packages/agents/.env
 BASE_SEPOLIA_RPC_URL=https://base-sepolia.infura.io/v3/<your-key>
-BASE_SEPOLIA_AGENT_C_PRIVATE_KEY=0x...     # the evaluator signs with this
-BASE_SEPOLIA_EVALUATOR_ADDRESS=0x...       # its address — never its key
-BASE_SEPOLIA_TREASURY_PRIVATE_KEY=0x...    # funds new agents' first gas
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/agentrail
+```
 
+Leave `packages/indexer/.env.local` pointing at the public endpoint. That
+separation matters — see section 3.4.
+
+### Step 7 — Get an OpenRouter key
+
+Create a key at <https://openrouter.ai>, then in `packages/agents/.env`:
+
+```bash
 LLM_PROVIDER=openrouter
-LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_API_KEY=sk-or-...
 LLM_MODEL=google/gemini-2.0-flash-001
 ```
 
-The evaluator's **address** is configured, never its key, in anything that
-creates a job. A client that held the evaluator's key could sign its own
-verdict, and the separation is the point of the whole design.
+Any model supporting **structured outputs** works. To skip this for now, leave
+`LLM_PROVIDER=mock`: agents still transact, but every deliverable is a fixed
+stand-in rather than real work.
 
-### `packages/indexer/.env.local` — Ponder
+### Step 8 — Create a Privy app
+
+At <https://dashboard.privy.io>:
+
+1. Create an app, and copy the **App ID** and **Client ID** from
+   *App settings → Basics*.
+2. Under **Login methods**, enable **Email** and **Wallet**.
+3. Under **User management → Authentication → Advanced**, enable
+   **"Return user data in an identity token"**.
+
+Then in `packages/web/.env`:
 
 ```bash
-CHAIN_ID=84532
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/agentrail
-BASE_SEPOLIA_INDEXER_RPC_URL=https://sepolia.base.org
-```
-
-Deliberately the **public** endpoint — see section 2.1.
-
-### `packages/web/.env` — Next.js
-
-```bash
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/agentrail
-NEXT_PUBLIC_CHAIN_ID=84532
-NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
-AGENT_RUNTIME_URL=http://127.0.0.1:4030
 NEXT_PUBLIC_PRIVY_APP_ID=<your app id>
 NEXT_PUBLIC_PRIVY_CLIENT_ID=<your client id>
 ```
 
-**`NEXT_PUBLIC_*` is inlined into the browser bundle**, so those variables hold
-public endpoints only. A private RPC URL here publishes its key to every
-visitor — which is why the public endpoint appears in this file and the Infura
-one does not.
+Step 3 is required for deposits and withdrawals — that token is the only proof
+of which wallet belongs to the signed-in user. Both identifiers are public and
+safe to commit; there is no app secret.
+
+### Step 9 — Check the setup
+
+```bash
+npm run preflight:base-sepolia
+```
+
+It reports every balance and registration and names anything missing. Fix what it
+lists before going on — it is far cheaper than discovering a problem mid-demo.
+
+Expect something like:
+
+```
+[preflight] Agent C (evaluator)  0.0500 ETH   1000 USDC   registered=true
+[preflight] Treasury             0.0500 ETH   funds 12 more agent(s)
+[preflight] ready.
+```
+
+### Step 10 — Run it
+
+```bash
+npm run dev:base-sepolia
+```
+
+Then open <http://localhost:3000>. Section 4 covers what this starts and how to
+run the services separately.
 
 ---
 
-## 5. Running the system
+## 3. Reference
 
-### 5.1 Start it
+### 3.1 What each account is for
+
+| Account | Required | Role |
+|---|---|---|
+| **Agent C** | yes | The evaluator. Signs the verdict that settles or refunds. |
+| **Treasury** | yes | Pays each new agent's first gas. |
+| Deployer | no | Only to deploy your own contracts (section 4.4) |
+| Agent A, Agent B | no | Seed agents from the design that preceded the marketplace |
+
+Their separation is the design rather than caution. The evaluator's key signs
+the verdict that releases money, so a client holding it could approve its own
+payment — the single thing this system exists to prevent. The deployer owns
+`JobContract` and `ReputationRegistry`, and an owner can re-point the identity
+registry, the evaluator module and the reputation registry, so an agent holding
+that key could rewrite the rules constraining its own job.
+
+### 3.2 What the treasury pays out
+
+- **0.004 ETH per agent created** — every provider, and every new user's
+  assistant. 0.05 ETH covers about twelve.
+- **0.0008 ETH per deposit**, covering gas for a wallet that has never held any.
+
+If agent creation starts failing, check the treasury first: preflight reports how
+many more agents its balance covers. The USDC costs nothing by comparison —
+`MockUSDC.mint` is unrestricted, so the 1000 USDC each new client receives is
+minted on demand. **ETH is the only finite resource here.**
+
+### 3.3 The four environment files
+
+Each is read by exactly one consumer. **A value set in the wrong file is
+ignored**, which looks identical to it having no effect.
+
+| File | Read by | Holds |
+|---|---|---|
+| `.env` | Hardhat, `preflight.ts` | RPC endpoint, deployer and agent keys |
+| `packages/agents/.env` | runtime, evaluator | RPC, evaluator key, treasury key, LLM, database |
+| `packages/indexer/.env.local` | Ponder (**not** `.env`) | chain id, database, its own RPC |
+| `packages/web/.env` | Next.js | database, Privy, public endpoints |
+
+### 3.4 Why the indexer uses a different endpoint
+
+`packages/indexer/.env.local` points at the public Base endpoint, deliberately:
+
+```bash
+BASE_SEPOLIA_INDEXER_RPC_URL=https://sepolia.base.org
+```
+
+The indexer only reads logs and blocks, so it never needed a private endpoint,
+and sharing one key between it and the agents starves the agents. A free Infura
+tier is a daily credit quota, and two keys were emptied in two days during
+development before this was found. Three settings exist because of it, and
+undoing any one brings the problem back:
+
+- the indexer on the public endpoint, as above;
+- the **browser never polls the chain** — it reads the indexer's database,
+  because `watchContractEvent` over HTTP is not a subscription but an
+  `eth_getLogs` poll, once per open tab;
+- the agents poll every **5 seconds**, not every block.
+
+Measured idle, the agents make about 52 requests a minute — roughly 75,000 a
+day, which a free key sustains comfortably.
+
+### 3.5 The language model
+
+The evaluator's verdict is parsed, signed and settled on chain, so a malformed
+reply would strand an escrow — hence the requirement for **structured outputs**.
+`google/gemini-2.0-flash-001` works well and is inexpensive.
+
+`LLM_PROVIDER=mock` runs with no key and no model calls. Agents still transact
+and every deliverable is a fixed stand-in, which is useful for checking the chain
+plumbing without spending anything — but it is not the system working. The
+marketplace only means something when the agents actually write and grade.
+
+---
+
+## 4. Running the system
+
+### 4.1 Start it
 
 ```bash
 npm run dev:base-sepolia
@@ -322,7 +309,7 @@ blocks, which takes a few minutes. Escrow Jobs and the event feed fill in behind
 it — but nothing is blocked, because the Assistant and the job drawer read the
 chain directly. You can commission work immediately.
 
-### 5.2 Or start the services separately
+### 4.2 Or start the services separately
 
 `dev.sh` stops everything when any one service exits, so a single crash ends the
 session. When something is failing, or during a demonstration where an indexer
@@ -345,7 +332,7 @@ works there and not on its own.
 `npm run web` needs no variant: it reads `NEXT_PUBLIC_CHAIN_ID` from
 `packages/web/.env`.
 
-### 5.3 Useful commands
+### 4.3 Useful commands
 
 ```bash
 npm run preflight:base-sepolia  # contracts deployed? agents registered and funded?
@@ -365,7 +352,7 @@ Ponder's schema instead:
 psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 ```
 
-### 5.4 Deploying your own contracts
+### 4.4 Deploying your own contracts
 
 ```bash
 npm run deploy:base-sepolia     # writes shared/src/deployments.ts
@@ -373,10 +360,10 @@ npm run seed:base-sepolia
 npm run verify:base-sepolia     # Basescan + Blockscout
 ```
 
-This needs the deployer account from section 2.4. After deploying, drop Ponder's
+This needs a deployer account — `npm run accounts:new` prints one. After deploying, drop Ponder's
 schema as above — it refuses to reuse one written against different contracts.
 
-## 6. Walkthrough
+## 5. Walkthrough
 
 1. Open <http://localhost:3000> and **sign in** with an email or a wallet.
 2. **Agents & Registry → Create provider agent.** Describe in plain language
@@ -402,9 +389,9 @@ and on block confirmations.
 
 ---
 
-## 7. System features
+## 6. System features
 
-### 7.1 A marketplace, not a fixed pipeline
+### 6.1 A marketplace, not a fixed pipeline
 
 Nothing about the work is hardcoded. Users create providers; each publishes what
 it sells, its price, the form it delivers in (`svg`, `markdown` or `text`) and
@@ -415,7 +402,7 @@ work that cannot be delivered.
 
 The only fixed role is the evaluator.
 
-### 7.2 Escrow with independent evaluation
+### 6.2 Escrow with independent evaluation
 
 `JobContract` holds four states — Open, Funded, Submitted, Terminal — and money
 moves only on a verdict:
@@ -431,7 +418,7 @@ moves only on a verdict:
   before displaying anything — so provider-supplied content cannot be swapped
   after the fact.
 
-### 7.3 Soulbound identity and reputation
+### 6.3 Soulbound identity and reputation
 
 `IdentityRegistry` is an ERC-721 permitting minting and nothing else — no
 transfer, no burn. An agent's identity cannot be sold, so reputation cannot be
@@ -440,7 +427,7 @@ bought. `ReputationRegistry` counts completed jobs.
 This deviates from ERC-8004, whose identity token is transferable. The deviation
 is deliberate.
 
-### 7.4 Agents own their accounts (ERC-4337)
+### 6.4 Agents own their accounts (ERC-4337)
 
 Every agent is an ERC-4337 smart account. `createJob`, `approve` and `fundJob`
 go out as a single batched user operation, and the EntryPoint owns the nonce,
@@ -451,7 +438,7 @@ The evaluator stays a plain EOA, because `EvaluatorModule` verifies with
 `ECDSA.recover`. A smart account signs per ERC-1271 — there is no key to
 recover — so every verdict would be rejected and every escrow stranded.
 
-### 7.5 Sign-in, ownership and money
+### 6.5 Sign-in, ownership and money
 
 - **Sign in with Privy**, by email or wallet. Ownership is keyed on the Privy
   DID, which is what the access token proves and what survives a user linking,
@@ -467,7 +454,7 @@ recover — so every verdict would be rejected and every escrow stranded.
   in a wallet only you control. The platform can spend an agent's balance and
   can never touch yours.
 
-### 7.6 Where the money comes from
+### 6.6 Where the money comes from
 
 Nothing in the system asks a user to fund anything before they can use it.
 
@@ -489,7 +476,7 @@ the USDC would be bought rather than minted — `MockUSDC.mint` is deliberately
 unrestricted, which is acceptable for a test token and would be a critical flaw
 in a real one.
 
-### 7.7 The web application
+### 6.7 The web application
 
 Five views: **Assistant** (talk to your agent, commission work, collect
 results), **Dashboard** (your agents, your escrow), **Agents & Registry** (the
@@ -500,7 +487,7 @@ Results can be previewed, downloaded with a sensible filename, or copied.
 Several commissions can be watched at once, because agents genuinely work
 concurrently.
 
-### 7.8 The chain is the source of truth
+### 6.8 The chain is the source of truth
 
 PostgreSQL is a read cache. If the two disagree, the chain wins — and anything
 being actively watched reads the chain directly, so a lagging indexer slows
@@ -508,7 +495,7 @@ history without ever showing a job in the wrong state.
 
 ---
 
-## 8. Components
+## 7. Components
 
 ```
 packages/
@@ -520,7 +507,7 @@ packages/
 scripts/       dev.sh, demo-reset.sh, preflight.ts, new-accounts.ts
 ```
 
-### 8.1 Smart contracts
+### 7.1 Smart contracts
 
 **`JobContract`** — the job lifecycle and the escrow. It holds the USDC and is
 the only thing that can move it.
@@ -568,7 +555,7 @@ directly.
 
 **`MockUSDC`** — see 8.2.
 
-### 8.2 Why MockUSDC
+### 7.2 Why MockUSDC
 
 Payments are denominated in USDC, and the contract used here is a mock: an
 ERC-20 with `decimals()` fixed at **6**, matching real USDC, and an unrestricted
@@ -600,7 +587,7 @@ here. On a real network that function would be a critical vulnerability; in a
 test token it is the faucet. It is worth stating rather than hoping nobody
 notices, because it is the first thing an examiner should ask about.
 
-### 8.3 The agent runtime (`packages/agents/src/runtime`)
+### 7.3 The agent runtime (`packages/agents/src/runtime`)
 
 A single Node service that hosts every agent a user creates. It holds their
 private keys, so it is never exposed to a browser — the web application proxies
@@ -624,7 +611,7 @@ fundJob as one user operation), `worker` (watches `JobFunded`, produces the work
 submits the hash), `claim` (`claimTimeout` for deliveries nobody judged), and
 `work` (briefs and deliverables, persisted).
 
-### 8.4 The provider (`packages/agents/src/provider`)
+### 7.4 The provider (`packages/agents/src/provider`)
 
 Does the work a provider was hired for. It is told what it sells by its own
 published summary, which is what makes one agent a designer and another a
@@ -633,7 +620,7 @@ for scripts, event handlers, `foreignObject` and remote references, and refused
 rather than sanitised, because the bytes that are hashed, judged and displayed
 must be identical.
 
-### 8.5 The evaluator (`packages/agents/src/agent-c`)
+### 7.5 The evaluator (`packages/agents/src/agent-c`)
 
 A separate process, deliberately. It watches `DeliverableSubmitted`, fetches the
 bytes from the provider, **re-derives the keccak256 hash and refuses a mismatch
@@ -644,7 +631,7 @@ It also sweeps on startup for jobs submitted while it was down. If it is not
 running, jobs stay at `Submitted` until a provider claims the timeout — which is
 the system behaving correctly, and looks exactly like it being broken.
 
-### 8.6 The indexer (`packages/indexer`)
+### 7.6 The indexer (`packages/indexer`)
 
 Ponder subscribes to every event from all five contracts and writes them into
 PostgreSQL: `agent`, `job`, `event` and `transfer` tables. It exists because the
@@ -655,9 +642,9 @@ It also computes what the chain does not record. `Terminal` collapses settled,
 refunded and timed-out into one state; the indexer keeps them apart as
 `outcome`, derived from which event fired.
 
-It reads from the public RPC endpoint, separately from the agents (section 2.1).
+It reads from the public RPC endpoint, separately from the agents (section 3.4).
 
-### 8.7 PostgreSQL, in two schemas
+### 7.7 PostgreSQL, in two schemas
 
 | Schema | Owner | Contents | Survives a reset |
 |---|---|---|---|
@@ -674,7 +661,7 @@ only a hash. Losing a deliverable does not fail a job — settlement runs on the
 hash — so the provider is paid and the client has nothing, and no timeout
 recovers it.
 
-### 8.8 The web application (`packages/web`)
+### 7.8 The web application (`packages/web`)
 
 Next.js App Router. Its API routes are the only thing that touches PostgreSQL or
 the agent runtime; client components never do. `lib/owner.ts` is the single place
@@ -699,7 +686,7 @@ All five verified on Basescan and Blockscout. Full design rationale in
 
 ---
 
-## 9. Troubleshooting
+## 8. Troubleshooting
 
 **A job stays at "Submitted" and never settles.** The evaluator is not running.
 It is a separate process and its death is silent — check `npm run
@@ -726,7 +713,7 @@ and the agent keys are the only copies.
 looking for a local node. Use the `:base-sepolia` variant — see 5.2.
 
 **"No wallet is linked to your account" when withdrawing.** Identity tokens are
-not enabled in the Privy dashboard (section 2.3, step 4), or the session predates
+not enabled in the Privy dashboard (setup step 8), or the session predates
 enabling them. Sign out and back in: the token is issued at login.
 
 **The page loads unstyled and empty.** A production build was run while the
