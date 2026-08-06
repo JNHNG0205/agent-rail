@@ -232,6 +232,13 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
                   src={`/api/deliverable/${job.id}`}
                   title={`Deliverable for job ${job.id}`}
                   sandbox=""
+                  // The page declares color-scheme: dark, and an iframe
+                  // inherits it — so a plain-text deliverable was rendered with
+                  // dark-mode defaults, white on the white background set here,
+                  // and could only be read by selecting it. The document inside
+                  // is the provider's own bytes and is not ours to restyle, so
+                  // the frame declares light instead.
+                  style={{ colorScheme: "light" }}
                   className="h-64 w-full rounded-b-lg border-t border-border bg-white"
                 />
               </div>

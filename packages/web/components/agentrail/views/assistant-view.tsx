@@ -168,6 +168,13 @@ function JobCard({ job, onDismiss }: { job: HiredJob; onDismiss: () => void }) {
                   src={result.deliverableUrl}
                   title={`Deliverable for job ${job.jobId}`}
                   sandbox=""
+                  // The page declares color-scheme: dark, and an iframe
+                  // inherits it — so a plain-text deliverable was rendered with
+                  // dark-mode defaults, white on the white background set here,
+                  // and could only be read by selecting it. The document inside
+                  // is the provider's own bytes and is not ours to restyle, so
+                  // the frame declares light instead.
+                  style={{ colorScheme: "light" }}
                   className={cn(
                     "w-full rounded-xl border border-border bg-white",
                     // A poster is portrait; a document is not, and forcing one
