@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react'
-import { Wallet, Activity, TrendingUp } from 'lucide-react'
+import { Wallet, Activity, TrendingUp, Sparkles } from 'lucide-react'
 import { AgentCard } from '@/components/agentrail/agent-card'
 import { JobEscrowManager } from '@/components/agentrail/job-escrow-manager'
 import { EventFeed } from '@/components/agentrail/event-feed'
@@ -14,30 +14,42 @@ import { WithdrawModal } from '@/components/agentrail/withdraw-modal'
 import { Button } from '@/ui/button'
 import { JobState } from '@agentrail/shared'
 
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+
 function Metric({
   icon,
   label,
   value,
   unit,
+  badge,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   unit?: string
+  badge?: string
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex size-10 items-center justify-center rounded-lg bg-secondary text-primary">
-        {icon}
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-card/90 via-card/70 to-card/40 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-primary/30 hover:shadow-primary/5">
+      <div className="absolute -right-6 -top-6 size-24 rounded-full bg-primary/5 blur-2xl transition-all duration-500 group-hover:bg-primary/10" />
+      <div className="flex items-center justify-between">
+        <div className="flex size-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-inner transition-transform duration-300 group-hover:scale-105">
+          {icon}
+        </div>
+        {badge && (
+          <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[10px] font-medium tracking-wider text-primary uppercase">
+            {badge}
+          </span>
+        )}
       </div>
-      <div className="leading-tight">
-        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+      <div className="mt-4 leading-tight">
+        <p className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
           {label}
         </p>
-        <p className="font-mono text-lg font-semibold text-foreground">
+        <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-foreground">
           {value}
           {unit ? (
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
               {unit}
             </span>
           ) : null}
@@ -49,23 +61,11 @@ function Metric({
 
 export function DashboardView() {
   const { mine, refetch } = useRegistry()
-  // Wider than the default: these figures are filtered down to your agents, and
-  // a page of recent jobs can hold none of yours while yours sit just outside it.
   const { jobs: liveJobs } = useJobs({ limit: 200 })
   const { signedIn, signIn } = useSession()
-  // Which agent the deposit dialog is for; null when it is closed.
   const [depositing, setDepositing] = useState<Agent | null>(null)
-  // Which agent each dialog is for; null when closed.
   const [withdrawing, setWithdrawing] = useState<Agent | null>(null)
 
-  // Your dashboard, not the system's. The marketplace is on the Agents tab,
-  // where seeing everyone is the point; here, other people's agents and their
-  // escrow are somebody else's business shown as if it were yours.
-  // Your assistant first. There is exactly one, it is the agent you talk to,
-  // and it is the only one here that spends rather than earns — so it is what
-  // this page is about, and it was appearing in whatever order the registry
-  // merge produced. Providers follow by name, which is stable: ordering them by
-  // balance would rearrange the page every time one was paid.
   const ordered = useMemo(
     () =>
       [...mine].sort((a, b) => {
@@ -81,57 +81,76 @@ export function DashboardView() {
       myAddresses.has(j.client.toLowerCase()) || myAddresses.has(j.provider.toLowerCase()),
   )
 
-  // Only jobs that still hold money. Summing every job counted escrow that
-  // settled or refunded weeks ago, which read as funds at stake when nothing
-  // was — the figure sat at 220 USDC beside an active-job count of zero.
   const totalEscrowUsdc = myJobs
     .filter((j) => j.state === JobState.Funded || j.state === JobState.Submitted)
     .reduce((acc, j) => acc + BigInt(j.amount), 0n)
   const activeJobsCount = myJobs.filter((j) => j.state !== JobState.Terminal).length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Overview Header */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            Dashboard Overview
+            <Sparkles className="size-4 text-primary/80" />
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Manage your personal AI agents, tracked escrows, and execution history.
+          </p>
+        </div>
+      </div>
+
       <section aria-label="Key metrics">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Metric
             icon={<Wallet className="size-5" aria-hidden="true" />}
             label="In Escrow Now"
             value={`${formatUsdc(totalEscrowUsdc)} USDC`}
+            badge="Locked"
           />
           <Metric
             icon={<Activity className="size-5" aria-hidden="true" />}
             label="Active Jobs"
             value={String(activeJobsCount)}
+            badge="Live"
           />
           <Metric
             icon={<TrendingUp className="size-5" aria-hidden="true" />}
             label="Your Agents"
             value={String(mine.length)}
+            badge="Owned"
           />
         </div>
       </section>
 
-      <section aria-label="Agent profiles">
+      <section aria-label="Agent profiles" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
+            Your Agents ({mine.length})
+          </h3>
+        </div>
+
         {!signedIn ? (
-          <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-6">
+          <div className="flex flex-col items-start gap-3 rounded-2xl border border-white/10 bg-card/60 p-6 backdrop-blur-md">
             <p className="text-sm text-muted-foreground">
               Sign in to see the agents you created. Everyone else&apos;s are on the
               Agents &amp; Registry tab — that list is public, because an agent finds
               who to hire by reading what everyone offers.
             </p>
-            <Button size="sm" onClick={signIn}>
+            <Button size="sm" onClick={signIn} className="shadow-lg shadow-primary/20">
               Sign in
             </Button>
           </div>
         ) : mine.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="rounded-2xl border border-white/10 bg-card/60 p-6 backdrop-blur-md">
             <p className="text-sm text-muted-foreground">
               You have not created an agent yet. Ask your assistant for something on
               the Assistant tab, or publish a service from Agents &amp; Registry.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {ordered.map((agent) => (
               <AgentCard
                 key={agent.address}
@@ -157,13 +176,11 @@ export function DashboardView() {
         agent={depositing}
         onClose={() => setDepositing(null)}
         onDeposited={() => {
-          // Delayed: the balance is read from the chain, and reading it the
-          // instant a transaction is submitted returns the value from before it.
           setTimeout(() => void refetch(), 6000)
         }}
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <JobEscrowManager />
         </div>

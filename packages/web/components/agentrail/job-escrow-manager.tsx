@@ -67,9 +67,9 @@ export function JobEscrowManager() {
 
   if (!job || !currentStepLabel) {
     return (
-      <section className="rounded-2xl border border-dashed border-border p-10 text-center">
-        <p className="text-sm font-medium">No jobs yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <section className="rounded-2xl border border-white/10 bg-card/60 p-10 text-center backdrop-blur-md">
+        <p className="text-sm font-semibold text-foreground">No jobs yet</p>
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
           Commission one from the Assistant tab and it will appear here.
         </p>
       </section>
@@ -79,61 +79,57 @@ export function JobEscrowManager() {
   return (
     <section
       aria-labelledby="escrow-heading"
-      className="rounded-2xl border border-border bg-card p-5 md:p-6"
+      className="flex h-[440px] flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-card/90 via-card/75 to-card/50 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:border-primary/30"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/5 pb-4">
         <div>
           <h2
             id="escrow-heading"
-            className="text-base font-semibold text-foreground"
+            className="text-base font-bold tracking-tight text-foreground"
           >
             ERC-8183 Job Escrow Manager
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="font-mono text-xs text-muted-foreground">
             {job.buyer} → {job.worker} · opened {job.createdAt}
           </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 shadow-sm">
           <Lock className="size-3.5" aria-hidden="true" />
           Escrow Locked
         </span>
       </div>
 
       {/* Progress tracker */}
-      <div className="mt-6 rounded-xl border border-border bg-background/40 p-4 md:p-5">
+      <div className="my-auto rounded-xl border border-white/5 bg-secondary/30 p-4 md:p-5 shadow-inner">
         <ProgressTracker currentStep={currentStepLabel} />
       </div>
 
       {/* Job details */}
-      <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <DetailRow
-          icon={<Fingerprint className="size-4" aria-hidden="true" />}
+          icon={<Fingerprint className="size-4 text-primary" aria-hidden="true" />}
           label="Job ID"
           mono
           copyValue={job.jobId}
         >
-          {job.jobId}
+          #{job.jobId}
         </DetailRow>
 
         <DetailRow
-          icon={<Lock className="size-4" aria-hidden="true" />}
+          icon={<Lock className="size-4 text-amber-400" aria-hidden="true" />}
           label="Escrow Amount"
         >
-          <span className="font-mono font-semibold">
+          <span className="font-mono font-bold text-foreground">
             {formatUsdc(job.escrowAmount)} USDC
           </span>
         </DetailRow>
 
-        {/* The keccak hash lives on the Escrow Jobs and Evaluator tabs, where
-            proving what was graded is the subject. Here it was a third copy on
-            the page someone opens to see how their own agents are doing. */}
-
         <DetailRow
-          icon={<FileSignature className="size-4" aria-hidden="true" />}
+          icon={<FileSignature className="size-4 text-primary" aria-hidden="true" />}
           label="Approval Status"
         >
-          <span className={liveJob?.state === 3 ? 'text-success' : 'text-muted-foreground'}>
-            {liveJob?.state === 3 ? 'Evaluated' : 'Awaiting evaluation'}
+          <span className={cn('font-medium', liveJob?.state === 3 ? 'text-emerald-400 font-semibold' : 'text-muted-foreground')}>
+            {liveJob?.state === 3 ? '✓ Evaluated & Settled' : 'Awaiting evaluation'}
           </span>
         </DetailRow>
       </div>
