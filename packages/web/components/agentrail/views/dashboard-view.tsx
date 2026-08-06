@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Wallet, Activity, TrendingUp } from 'lucide-react'
 import { AgentCard } from '@/components/agentrail/agent-card'
 import { JobEscrowManager } from '@/components/agentrail/job-escrow-manager'
@@ -61,6 +61,20 @@ export function DashboardView() {
   // Your dashboard, not the system's. The marketplace is on the Agents tab,
   // where seeing everyone is the point; here, other people's agents and their
   // escrow are somebody else's business shown as if it were yours.
+  // Your assistant first. There is exactly one, it is the agent you talk to,
+  // and it is the only one here that spends rather than earns — so it is what
+  // this page is about, and it was appearing in whatever order the registry
+  // merge produced. Providers follow by name, which is stable: ordering them by
+  // balance would rearrange the page every time one was paid.
+  const ordered = useMemo(
+    () =>
+      [...mine].sort((a, b) => {
+        if (a.role !== b.role) return a.role === 'client' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      }),
+    [mine],
+  )
+
   const myAddresses = new Set(mine.map((a) => a.address.toLowerCase()))
   const myJobs = liveJobs.filter(
     (j) =>
@@ -118,7 +132,7 @@ export function DashboardView() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {mine.map((agent) => (
+            {ordered.map((agent) => (
               <AgentCard
                 key={agent.address}
                 agent={agent}
