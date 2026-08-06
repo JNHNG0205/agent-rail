@@ -152,7 +152,7 @@ BASE_SEPOLIA_RPC_URL=https://base-sepolia.infura.io/v3/<your-key>
 ```
 
 Leave `packages/indexer/.env.local` pointing at the public endpoint. That
-separation matters — see section 3.4.
+separation matters — see section 3.5.
 
 ### Step 7 — Get an OpenRouter key
 
@@ -246,7 +246,33 @@ many more agents its balance covers. The USDC costs nothing by comparison —
 `MockUSDC.mint` is unrestricted, so the 1000 USDC each new client receives is
 minted on demand. **ETH is the only finite resource here.**
 
-### 3.3 The four environment files
+### 3.3 What a new installation looks like
+
+Agents live in your own PostgreSQL, keyed by the identity you signed in with.
+The chain is shared. So two people running this from the same repository see
+different things, and it is worth knowing which is which before it looks like a
+fault.
+
+| | Where it lives | A fresh installation shows |
+|---|---|---|
+| Agents you can hire | your database | **nothing** |
+| Your dashboard | your database, your DID | **nothing** |
+| Escrow Jobs | the chain | every job anyone has ever run |
+| Registered, not hosted | the chain | every identity ever registered |
+
+That last pair is not a mistake. Identity tokens are soulbound and jobs are
+permanent, so anybody pointing at these contracts sees the whole history —
+including agents whose keys are on somebody else's machine, which is why they
+appear as registered and not hosted.
+
+**A new installation must create a provider before anything can be
+commissioned.** Signing in creates your assistant automatically, but an
+assistant with nobody to hire will say so rather than invent a counterparty.
+Seeding does not help here: it registers identities on chain and creates no
+hosted agents, so "available to hire" stays empty until you create one from
+**Agents & Registry**.
+
+### 3.4 The four environment files
 
 Each is read by exactly one consumer. **A value set in the wrong file is
 ignored**, which looks identical to it having no effect.
@@ -258,7 +284,7 @@ ignored**, which looks identical to it having no effect.
 | `packages/indexer/.env.local` | Ponder (**not** `.env`) | chain id, database, its own RPC |
 | `packages/web/.env` | Next.js | database, Privy, public endpoints |
 
-### 3.4 Why the indexer uses a different endpoint
+### 3.5 Why the indexer uses a different endpoint
 
 `packages/indexer/.env.local` points at the public Base endpoint, deliberately:
 
@@ -281,7 +307,7 @@ undoing any one brings the problem back:
 Measured idle, the agents make about 52 requests a minute — roughly 75,000 a
 day, which a free key sustains comfortably.
 
-### 3.5 The language model
+### 3.6 The language model
 
 The evaluator's verdict is parsed, signed and settled on chain, so a malformed
 reply would strand an escrow — hence the requirement for **structured outputs**.
@@ -384,8 +410,9 @@ schema as above — it refuses to reuse one written against different contracts.
 ## 5. Walkthrough
 
 1. Open <http://localhost:3000> and **sign in** with an email or a wallet.
-2. **Agents & Registry → Create provider agent.** Describe in plain language
-   what it sells. The system proposes a price, a delivery format and the terms
+2. **Agents & Registry → Create provider agent.** Do this first: a new
+   installation has no hosted agents, so there is nobody to hire until you make
+   one (section 3.3). Describe in plain language what it sells. The system proposes a price, a delivery format and the terms
    it will be graded against. Read them before confirming: registration is
    soulbound and cannot be undone, and terms that cannot be checked by reading
    the delivered work make the escrow settle at random.
@@ -660,7 +687,7 @@ It also computes what the chain does not record. `Terminal` collapses settled,
 refunded and timed-out into one state; the indexer keeps them apart as
 `outcome`, derived from which event fired.
 
-It reads from the public RPC endpoint, separately from the agents (section 3.4).
+It reads from the public RPC endpoint, separately from the agents (section 3.5).
 
 ### 7.7 PostgreSQL, in two schemas
 
