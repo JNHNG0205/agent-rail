@@ -20,6 +20,9 @@ contract IdentityRegistry is ERC721 {
     /// @param tokenId The unique ERC-721 token ID assigned to the agent.
     event AgentRegistered(address indexed agent, uint256 indexed tokenId);
 
+    /// @notice Thrown on any attempt to move or destroy an identity token.
+    error Soulbound();
+
     constructor() ERC721("AgentIdentity", "AID") {}
 
     /// @notice Registers a new AI agent by minting an identity NFT.
@@ -61,5 +64,35 @@ contract IdentityRegistry is ERC721 {
     /// @return The owner address of the token ID.
     function getAgentAddress(uint256 tokenId) external view returns (address) {
         return ownerOf(tokenId);
+    }
+
+    /// @dev Enforces soulbinding. Every mint, transfer and burn in OpenZeppelin
+    ///      v5 routes through this hook, so permitting only the mint case
+    ///      (`from == address(0)`) blocks transfers and burns alike.
+    ///
+    ///      This is not cosmetic. `_registered` and `_agentTokenId` are keyed by
+    ///      address and never updated after minting, so a transfer would leave
+    ///      isRegistered() and getAgentId() describing the old holder while
+    ///      getAgentAddress() reported the new one — two views of the same fact
+    ///      permanently disagreeing. Burning would strand the same mappings
+    ///      pointing at a token that no longer exists.
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address)
+    {
+        if (_ownerOf(tokenId) != address(0)) revert Soulbound();
+        return super._update(to, tokenId, auth);
+    }
+
+    /// @dev Approvals are blocked too. A token that cannot move makes an
+    ///      approval unusable by construction, and letting approve() succeed
+    ///      would advertise a capability that never works.
+    function approve(address, uint256) public pure override {
+        revert Soulbound();
+    }
+
+    function setApprovalForAll(address, bool) public pure override {
+        revert Soulbound();
     }
 }

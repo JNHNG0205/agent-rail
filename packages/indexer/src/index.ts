@@ -1,60 +1,182 @@
-import "dotenv/config";
-import { createPublicClient, http } from "viem";
-import {
-  getAddresses,
-  JobContractAbi,
-  IdentityRegistryAbi,
-  ReputationRegistryAbi,
-  CHAIN_ID,
-  CHAIN_NAME,
-  RPC_URL,
-} from "@agentrail/shared";
-import { handleJobEvent } from "./handlers/jobEvents.js";
-import { handleRegistryEvent } from "./handlers/registryEvents.js";
+import { ponder } from "ponder:registry";
+import { agent, job, event, transfer } from "ponder:schema";
 
-/// Subscribes to every AgentRail contract event and upserts it into Postgres.
-/// The DB is a read cache; the chain remains the source of truth.
-async function main() {
-  const client = createPublicClient({ transport: http(RPC_URL) });
+/// Indexing functions. Ponder handles backfill, reorgs and checkpointing; what
+/// lives here is only the domain logic — which event means which state, and what
+/// the projection should look like afterwards.
 
-  // Throw rather than silently watching the zero address on an undeployed chain.
-  const addresses = getAddresses(CHAIN_ID);
+type EventContext = {
+  id: string;
+  chainId: number;
+  txHash: `0x${string}`;
+  logIndex: number;
+  blockNumber: bigint;
+  blockTimestamp: bigint;
+};
 
-  console.log(`[indexer] ${CHAIN_NAME} (${CHAIN_ID}) via ${RPC_URL}`);
-  console.log("[indexer] watching contracts:", addresses);
-
-  const unwatchJobs = client.watchContractEvent({
-    address: addresses.JobContract,
-    abi: JobContractAbi,
-    onLogs: (logs) => logs.forEach(handleJobEvent),
-    onError: (err) => console.error("[indexer] job watch error:", err),
-  });
-
-  const unwatchIdentity = client.watchContractEvent({
-    address: addresses.IdentityRegistry,
-    abi: IdentityRegistryAbi,
-    onLogs: (logs) => logs.forEach(handleRegistryEvent),
-    onError: (err) => console.error("[indexer] identity watch error:", err),
-  });
-
-  const unwatchReputation = client.watchContractEvent({
-    address: addresses.ReputationRegistry,
-    abi: ReputationRegistryAbi,
-    onLogs: (logs) => logs.forEach(handleRegistryEvent),
-    onError: (err) => console.error("[indexer] reputation watch error:", err),
-  });
-
-  const shutdown = () => {
-    unwatchJobs();
-    unwatchIdentity();
-    unwatchReputation();
-    process.exit(0);
+/// Every log lands in the append-only feed as well as its projection, so the UI
+/// can show what happened, not just where things ended up.
+function logContext(ev: {
+  id: string;
+  log: { logIndex: number };
+  transaction: { hash: `0x${string}` };
+  block: { number: bigint; timestamp: bigint };
+}): EventContext {
+  return {
+    id: ev.id,
+    chainId: 0, // overwritten below from context
+    txHash: ev.transaction.hash,
+    logIndex: ev.log.logIndex,
+    blockNumber: ev.block.number,
+    blockTimestamp: ev.block.timestamp,
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+async function recordEvent(
+  context: { db: any; chain: { id: number } },
+  ev: Parameters<typeof logContext>[0],
+  contract: string,
+  eventName: string,
+  jobId: bigint | null,
+  args: unknown,
+) {
+  const c = logContext(ev);
+  await context.db.insert(event).values({
+    id: c.id,
+    chainId: context.chain.id,
+    contract,
+    eventName,
+    jobId,
+    txHash: c.txHash,
+    logIndex: c.logIndex,
+    blockNumber: c.blockNumber,
+    blockTimestamp: c.blockTimestamp,
+    // bigints cannot be serialised to JSON — stringify before they reach jsonb.
+    args: JSON.parse(JSON.stringify(args, (_k, v) => (typeof v === "bigint" ? v.toString() : v))),
+  });
+}
+
+// ─── IdentityRegistry ────────────────────────────────────────────────────────
+
+ponder.on("IdentityRegistry:AgentRegistered", async ({ event: ev, context }) => {
+  await context.db
+    .insert(agent)
+    .values({
+      address: ev.args.agent,
+      tokenId: ev.args.tokenId,
+      reputation: 0n,
+      registeredAt: ev.block.timestamp,
+    })
+    .onConflictDoUpdate(() => ({ tokenId: ev.args.tokenId, registeredAt: ev.block.timestamp }));
+
+  await recordEvent(context, ev, "IdentityRegistry", "AgentRegistered", null, ev.args);
+});
+
+// ─── ReputationRegistry ──────────────────────────────────────────────────────
+
+ponder.on("ReputationRegistry:ReputationUpdated", async ({ event: ev, context }) => {
+  // The agent may not be registered yet — separate contracts give no ordering
+  // guarantee — so insert a bare row rather than losing the score.
+  await context.db
+    .insert(agent)
+    .values({ address: ev.args.agent, reputation: ev.args.newScore })
+    .onConflictDoUpdate(() => ({ reputation: ev.args.newScore }));
+
+  await recordEvent(context, ev, "ReputationRegistry", "ReputationUpdated", null, ev.args);
+});
+
+// ─── JobContract ─────────────────────────────────────────────────────────────
+
+ponder.on("JobContract:JobCreated", async ({ event: ev, context }) => {
+  await context.db.insert(job).values({
+    id: ev.args.jobId,
+    client: ev.args.client,
+    provider: ev.args.provider,
+    evaluator: ev.args.evaluator,
+    amount: ev.args.amount,
+    state: "Open",
+    deliverableHash: null,
+    outcome: null,
+    createdBlock: ev.block.number,
+    updatedBlock: ev.block.number,
+  });
+
+  await recordEvent(context, ev, "JobContract", "JobCreated", ev.args.jobId, ev.args);
+});
+
+ponder.on("JobContract:JobFunded", async ({ event: ev, context }) => {
+  await context.db
+    .update(job, { id: ev.args.jobId })
+    .set({ state: "Funded", updatedBlock: ev.block.number });
+
+  await recordEvent(context, ev, "JobContract", "JobFunded", ev.args.jobId, ev.args);
+});
+
+ponder.on("JobContract:DeliverableSubmitted", async ({ event: ev, context }) => {
+  await context.db.update(job, { id: ev.args.jobId }).set({
+    state: "Submitted",
+    deliverableHash: ev.args.deliverableHash,
+    updatedBlock: ev.block.number,
+  });
+
+  await recordEvent(
+    context,
+    ev,
+    "JobContract",
+    "DeliverableSubmitted",
+    ev.args.jobId,
+    ev.args,
+  );
+});
+
+// Terminal covers three different endings. `state` alone cannot tell them
+// apart, so `outcome` records which one actually happened.
+ponder.on("JobContract:JobCompleted", async ({ event: ev, context }) => {
+  await context.db
+    .update(job, { id: ev.args.jobId })
+    .set({ state: "Terminal", outcome: "completed", updatedBlock: ev.block.number });
+
+  await recordEvent(context, ev, "JobContract", "JobCompleted", ev.args.jobId, ev.args);
+});
+
+ponder.on("JobContract:JobCancelled", async ({ event: ev, context }) => {
+  await context.db
+    .update(job, { id: ev.args.jobId })
+    .set({ state: "Terminal", outcome: "cancelled", updatedBlock: ev.block.number });
+
+  await recordEvent(context, ev, "JobContract", "JobCancelled", ev.args.jobId, ev.args);
+});
+
+ponder.on("JobContract:JobTimeoutClaimed", async ({ event: ev, context }) => {
+  await context.db
+    .update(job, { id: ev.args.jobId })
+    .set({ state: "Terminal", outcome: "timeoutClaimed", updatedBlock: ev.block.number });
+
+  await recordEvent(context, ev, "JobContract", "JobTimeoutClaimed", ev.args.jobId, ev.args);
+});
+
+// ─── EvaluatorModule ─────────────────────────────────────────────────────────
+
+ponder.on("EvaluatorModule:ApprovalProcessed", async ({ event: ev, context }) => {
+  await recordEvent(
+    context,
+    ev,
+    "EvaluatorModule",
+    "ApprovalProcessed",
+    ev.args.jobId,
+    ev.args,
+  );
+});
+
+// ─── MockUSDC ────────────────────────────────────────────────────────────────
+
+ponder.on("MockUSDC:Transfer", async ({ event: ev, context }) => {
+  await context.db.insert(transfer).values({
+    id: ev.id,
+    from: ev.args.from,
+    to: ev.args.to,
+    value: ev.args.value,
+    blockNumber: ev.block.number,
+    txHash: ev.transaction.hash,
+  });
 });

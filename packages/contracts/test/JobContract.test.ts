@@ -399,3 +399,90 @@ describe("JobContract - Core Business Logic & USDC Escrow (Viem)", function () {
     });
   });
 });
+
+describe("JobContract — identity gating", function () {
+  async function fixture() {
+    const [owner, client, provider, evaluator] = await hre.viem.getWalletClients();
+    const usdc = await hre.viem.deployContract("MockUSDC");
+    const job = await hre.viem.deployContract("JobContract", [usdc.address]);
+    const identity = await hre.viem.deployContract("IdentityRegistry");
+    return { usdc, job, identity, owner, client, provider, evaluator };
+  }
+
+  const AMOUNT = 10n * 10n ** 6n;
+
+  it("permits any address while no registry is wired", async function () {
+    // Backwards compatibility: a deployment that never calls
+    // setIdentityRegistry keeps the previous permissionless behaviour.
+    const { job, client, provider, evaluator } = await fixture();
+
+    await job.write.createJob([provider.account.address, evaluator.account.address, AMOUNT], {
+      account: client.account,
+    });
+
+    expect(await job.read.nextJobId()).to.equal(1n);
+  });
+
+  it("reverts NotRegistered for an unregistered provider once wired", async function () {
+    const { job, identity, client, provider, evaluator } = await fixture();
+    await job.write.setIdentityRegistry([identity.address]);
+    await identity.write.registerAgent([client.account.address]);
+    await identity.write.registerAgent([evaluator.account.address]);
+    // provider deliberately left unregistered
+
+    await expect(
+      job.write.createJob([provider.account.address, evaluator.account.address, AMOUNT], {
+        account: client.account,
+      })
+    ).to.be.rejectedWith("NotRegistered");
+  });
+
+  it("reverts NotRegistered for an unregistered evaluator once wired", async function () {
+    const { job, identity, client, provider, evaluator } = await fixture();
+    await job.write.setIdentityRegistry([identity.address]);
+    await identity.write.registerAgent([client.account.address]);
+    await identity.write.registerAgent([provider.account.address]);
+
+    await expect(
+      job.write.createJob([provider.account.address, evaluator.account.address, AMOUNT], {
+        account: client.account,
+      })
+    ).to.be.rejectedWith("NotRegistered");
+  });
+
+  it("reverts NotRegistered for an unregistered client once wired", async function () {
+    const { job, identity, client, provider, evaluator } = await fixture();
+    await job.write.setIdentityRegistry([identity.address]);
+    await identity.write.registerAgent([provider.account.address]);
+    await identity.write.registerAgent([evaluator.account.address]);
+
+    await expect(
+      job.write.createJob([provider.account.address, evaluator.account.address, AMOUNT], {
+        account: client.account,
+      })
+    ).to.be.rejectedWith("NotRegistered");
+  });
+
+  it("creates the job when all three parties hold identity tokens", async function () {
+    const { job, identity, client, provider, evaluator } = await fixture();
+    await job.write.setIdentityRegistry([identity.address]);
+    for (const a of [client, provider, evaluator]) {
+      await identity.write.registerAgent([a.account.address]);
+    }
+
+    await job.write.createJob([provider.account.address, evaluator.account.address, AMOUNT], {
+      account: client.account,
+    });
+
+    const created = (await job.read.getJob([0n])) as { state: number; evaluator: string };
+    expect(created.state).to.equal(0);
+    expect(created.evaluator.toLowerCase()).to.equal(evaluator.account.address.toLowerCase());
+  });
+
+  it("only the owner may set the identity registry", async function () {
+    const { job, identity, client } = await fixture();
+    await expect(
+      job.write.setIdentityRegistry([identity.address], { account: client.account })
+    ).to.be.rejectedWith("Unauthorized");
+  });
+});

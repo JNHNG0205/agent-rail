@@ -2,7 +2,7 @@
 // deploy.ts only rewrites src/deployments.ts.
 import type { ContractAddresses } from "./types";
 import { CHAIN_ID, CHAIN_META, BASE_SEPOLIA_CHAIN_ID } from "./constants";
-import { deployments } from "./deployments";
+import { deployments, deploymentBlocks } from "./deployments";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -39,4 +39,4 @@ export function getAddresses(chainId: number): ContractAddresses {
 /// machine that has not deployed yet. Use getAddresses() where you want a throw.
 export const addresses: ContractAddresses = deployments[CHAIN_ID] ?? UNDEPLOYED;
 
-export { deployments };
+export { deployments, deploymentBlocks };

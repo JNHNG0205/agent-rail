@@ -39,3 +39,8 @@ npm-debug.log*
 .claude/
 /CLAUDE.md
 /docs
+.superpowers/
+# ponder build output
+.ponder/
+packages/indexer/generated/
+.agents.json
