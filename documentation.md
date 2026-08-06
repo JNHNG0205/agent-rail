@@ -288,57 +288,83 @@ one does not.
 
 ## 5. Running the system
 
-### 5.1 Using the deployed contracts (recommended)
-
-The contracts are already deployed and verified on Base Sepolia, and
-`packages/shared/src/deployments.ts` already holds their addresses. Nothing
-needs deploying.
-
-Register your agents and give them test USDC:
+### 5.1 Start it
 
 ```bash
-npm run seed:base-sepolia
+npm run db:up                 # PostgreSQL, if it is not already up
+npm run seed:base-sepolia     # once, to register your agents and mint their USDC
+npm run dev:base-sepolia      # everything
 ```
 
-Then start everything:
+`dev.sh` starts PostgreSQL, checks the deployed contracts and every account's
+balance and registration, then runs the indexer, the agent runtime, the
+evaluator and the web application. It refuses to start if anything is wrong,
+which is better than finding out mid-demonstration. `Ctrl-C` stops all of it.
+
+Open <http://localhost:3000>.
+
+The contracts are already deployed and their addresses are already in
+`packages/shared/src/deployments.ts`, so nothing needs deploying. To deploy your
+own instead, see 5.4.
+
+**Expect the indexer to lag on first start.** It backfills roughly 120,000
+blocks, which takes a few minutes. Escrow Jobs and the event feed fill in behind
+it — but nothing is blocked, because the Assistant and the job drawer read the
+chain directly. You can commission work immediately.
+
+### 5.2 Or start the services separately
+
+`dev.sh` stops everything when any one service exits, so a single crash ends the
+session. When something is failing, or during a demonstration where an indexer
+hiccup should not take the application down, run them in four terminals:
 
 ```bash
-npm run dev:base-sepolia
-```
-
-It checks the contracts, registrations and balances first, and refuses to start
-if anything is wrong. Open <http://localhost:3000>.
-
-### 5.2 Deploying your own
-
-```bash
-npm run deploy:base-sepolia     # writes shared/src/deployments.ts
-npm run seed:base-sepolia
-npm run verify:base-sepolia     # Basescan + Blockscout
-npm run dev:base-sepolia
-```
-
-### 5.3 Individually
-
-`dev.sh` stops every service when any one of them exits. When something is
-failing, run them in separate terminals so one crash does not end the session:
-
-```bash
-npm run indexer                 # Ponder event indexer
+npm run indexer:base-sepolia    # Ponder event indexer
 npm run runtime:base-sepolia    # directory, chat, hire, provider workers
 npm run agent:c:base-sepolia    # the evaluator
 npm run web                     # Next.js at :3000
 ```
 
-Other useful commands:
+**Use the `:base-sepolia` variants.** Every service takes its chain from
+`CHAIN_ID`, and those variants set it. The plain names use whatever is in that
+package's own env file, which for the indexer is `31337` — so `npm run indexer`
+on its own looks for a local chain and fails with `ECONNREFUSED 127.0.0.1:8545`.
+`dev.sh` exports `CHAIN_ID` for its children, which is why the same command
+works there and not on its own.
+
+`npm run web` needs no variant: it reads `NEXT_PUBLIC_CHAIN_ID` from
+`packages/web/.env`.
+
+### 5.3 Useful commands
 
 ```bash
 npm run preflight:base-sepolia  # contracts deployed? agents registered and funded?
+npm run accounts:new            # generate the five testnet accounts
 npm test                        # every workspace's tests
+npm run db:reset                # wipe PostgreSQL — see the note below
 npm run demo:reset base-sepolia # kill strays, then start clean
 ```
 
----
+`db:reset` destroys the indexed history **and the agent records**, including
+their private keys. Those keys are the only copies, and an identity token is
+soulbound, so the agents they belong to become permanently unusable. Use it only
+on a database you are willing to lose. To clear just the indexed history, drop
+Ponder's schema instead:
+
+```bash
+psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
+
+### 5.4 Deploying your own contracts
+
+```bash
+npm run deploy:base-sepolia     # writes shared/src/deployments.ts
+npm run seed:base-sepolia
+npm run verify:base-sepolia     # Basescan + Blockscout
+```
+
+This needs the deployer account from section 2.4. After deploying, drop Ponder's
+schema as above — it refuses to reuse one written against different contracts.
 
 ## 6. Walkthrough
 
@@ -674,10 +700,20 @@ is broken".
 for the reset, or use a second key. Do not point the indexer at the same key as
 the agents.
 
-**The indexer exits complaining about a schema.** Ponder owns the `public`
-schema and refuses to reuse one written by a different configuration. Run
-`npm run db:reset`. Agent keys are unaffected — they live in the `runtime`
-schema precisely so this is safe.
+**The indexer exits: `Schema "public" was previously used by a different Ponder
+app`.** It refuses to reuse a schema written against a different chain or a
+different set of contracts. Drop Ponder's schema and start it again:
+
+```bash
+psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
+
+Agent keys are unaffected — they live in the `runtime` schema precisely so this
+is safe. Do **not** use `npm run db:reset` for this: it destroys both schemas,
+and the agent keys are the only copies.
+
+**A service reports `ECONNREFUSED 127.0.0.1:8545`.** It is on the wrong chain,
+looking for a local node. Use the `:base-sepolia` variant — see 5.2.
 
 **"No wallet is linked to your account" when withdrawing.** Identity tokens are
 not enabled in the Privy dashboard (section 2.3, step 4), or the session predates

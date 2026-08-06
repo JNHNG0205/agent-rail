@@ -20,6 +20,7 @@
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v",
     "indexer": "npm -w packages/indexer run start",
+    "indexer:base-sepolia": "CHAIN_ID=84532 npm -w packages/indexer run start",
     "web": "npm -w packages/web run dev",
     "agent:c": "npm -w packages/agents run start:c",
     "runtime": "npm -w packages/agents run start:runtime",
