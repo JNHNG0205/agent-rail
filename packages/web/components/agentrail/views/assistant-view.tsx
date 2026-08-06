@@ -9,6 +9,8 @@ import {
   XCircle,
   Loader2,
   X,
+  ChevronDown,
+  ChevronUp,
   Download,
   ExternalLink,
   Copy,
@@ -71,9 +73,21 @@ function Progress({ stage, outcome }: { stage: JobStage | null; outcome: string 
 /// id, so several jobs can only progress independently if each card owns its
 /// own hook. That is also the honest picture — the agents genuinely do work at
 /// the same time.
-function JobCard({ job, onDismiss }: { job: HiredJob; onDismiss: () => void }) {
+function JobCard({
+  job,
+  onDismiss,
+  defaultOpen = false,
+}: {
+  job: HiredJob;
+  onDismiss: () => void;
+  /// Whether the preview starts open. True for the newest commission only:
+  /// four full-size previews stacked is a column taller than the screen, and
+  /// the older ones are results somebody has already looked at.
+  defaultOpen?: boolean;
+}) {
   const result = useJobResult(job.jobId);
   const [copied, setCopied] = useState(false);
+  const [showPreview, setShowPreview] = useState(defaultOpen);
 
   /// Copying beats downloading for a document someone is about to paste. The
   /// bytes come from the same hash-checked route the preview uses, so what is
@@ -160,10 +174,20 @@ function JobCard({ job, onDismiss }: { job: HiredJob; onDismiss: () => void }) {
                     </button>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview((v) => !v)}
+                  className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  {showPreview ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                  {showPreview ? "Hide preview" : "Show preview"}
+                </button>
+
                 {/* Sandboxed: the deliverable is untrusted output from another
                     agent, and the route serves it with a locked-down CSP. An
                     iframe suits every kind — the route sets the content type, so
                     the browser renders a drawing as one and a document as text. */}
+                {showPreview && (
                 <iframe
                   src={result.deliverableUrl}
                   title={`Deliverable for job ${job.jobId}`}
@@ -182,6 +206,7 @@ function JobCard({ job, onDismiss }: { job: HiredJob; onDismiss: () => void }) {
                     job.kind === "svg" ? "aspect-[3/4]" : "h-80",
                   )}
                 />
+                )}
               </div>
             )}
           </section>
@@ -207,8 +232,13 @@ export function AssistantView() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-      <section className="flex min-h-[32rem] flex-col rounded-2xl border border-border bg-card">
+    // Fixed to the viewport on a wide screen, with each column scrolling
+    // itself. The page used to grow with every commission — four job cards, each
+    // with a full-size preview, made a column several screens tall while the
+    // conversation beside it sat in white space. A chat that scrolls the whole
+    // document is also the wrong shape: the composer should stay put.
+    <div className="grid gap-6 lg:h-[calc(100vh-10rem)] lg:grid-cols-[1fr_20rem]">
+      <section className="flex min-h-[32rem] flex-col rounded-2xl border border-border bg-card lg:min-h-0">
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
@@ -307,15 +337,20 @@ export function AssistantView() {
         </form>
       </section>
 
-      <aside className="flex flex-col gap-4">
+      <aside className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
         {error && (
           <p className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </p>
         )}
 
-        {jobs.map((job) => (
-          <JobCard key={job.jobId} job={job} onDismiss={() => dismissJob(job.jobId)} />
+        {jobs.map((job, i) => (
+          <JobCard
+            key={job.jobId}
+            job={job}
+            defaultOpen={i === 0}
+            onDismiss={() => dismissJob(job.jobId)}
+          />
         ))}
 
         <section className="rounded-2xl border border-border bg-card p-5">
