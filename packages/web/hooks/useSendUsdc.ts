@@ -6,13 +6,20 @@ import { useSendTransaction } from "@privy-io/react-auth";
 import { MockUSDCAbi, addresses, parseUsdc, formatUsdc } from "@agentrail/shared";
 import { useAuthedFetch, useSession } from "@/lib/session";
 
-/// Putting your own money into your agent. Member 4.
+/// Send USDC from your own wallet. Member 4.
 ///
-/// The mirror of withdrawal, and deliberately not its equal. Taking money out
-/// happens server-side, because the agent's key is held there. Putting money in
-/// cannot: the funds are in a wallet only the person controls, so they sign it
-/// themselves. That asymmetry is the honest shape of the system — the platform
-/// can spend an agent's balance and cannot touch yours.
+/// Used both to fund an agent and to move money out to any address. They are the
+/// same operation — an ERC-20 transfer the person signs — and naming it after
+/// only one of them hid that.
+///
+/// This is deliberately not the mirror of agent withdrawal. Taking money out of
+/// an agent happens server-side, because the runtime holds that key, and the
+/// destination must be a wallet Privy has verified: the server is moving
+/// custodial funds, and a page that could name the destination could redirect
+/// somebody's earnings. Here the funds are in a wallet only the person controls
+/// and they sign it themselves, so any address is theirs to choose — the risk is
+/// a typo, not an authorisation hole, and refusing would be a wallet that will
+/// not let you spend your own money.
 ///
 /// One wrinkle stands in the way. A wallet created at sign-in has never held
 /// ETH, and a wallet with no ETH cannot sign anything, so the treasury covers
@@ -20,21 +27,21 @@ import { useAuthedFetch, useSession } from "@/lib/session";
 /// on a real network the person would hold ETH, or the app would sponsor it
 /// through a paymaster.
 
-export type DepositStage = "idle" | "gas" | "signing" | "confirming" | "done";
+export type SendStage = "idle" | "gas" | "signing" | "confirming" | "done";
 
-export function useDeposit() {
+export function useSendUsdc() {
   const { address } = useSession();
   const authedFetch = useAuthedFetch();
   const { sendTransaction } = useSendTransaction();
-  const [stage, setStage] = useState<DepositStage>("idle");
+  const [stage, setStage] = useState<SendStage>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const deposit = useCallback(
+  const send = useCallback(
     async (to: `0x${string}`, amountUsdc: string): Promise<`0x${string}` | null> => {
       setError(null);
 
       if (!address) {
-        setError("connect a wallet to deposit from");
+        setError("connect a wallet to send from");
         return null;
       }
 
@@ -77,7 +84,7 @@ export function useDeposit() {
         setStage("confirming");
         return hash;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "the deposit did not go through");
+        setError(err instanceof Error ? err.message : "the transfer did not go through");
         return null;
       } finally {
         setStage("idle");
@@ -86,5 +93,5 @@ export function useDeposit() {
     [address, authedFetch, sendTransaction],
   );
 
-  return { deposit, stage, error, formatUsdc };
+  return { send, stage, error, formatUsdc };
 }

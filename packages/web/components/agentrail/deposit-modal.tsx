@@ -5,7 +5,7 @@ import { ArrowDownLeft, Loader2, Wallet } from "lucide-react";
 import { formatUsdc as exactUsdc, parseUsdc } from "@agentrail/shared";
 import { formatUsdc } from "@/lib/agentrail-data";
 import { Button } from "@/ui/button";
-import { useDeposit } from "@/hooks/useDeposit";
+import { useSendUsdc } from "@/hooks/useSendUsdc";
 import { useSession } from "@/lib/session";
 import { readUsdcBalance } from "@/lib/contracts";
 import type { Agent } from "@/lib/agentrail-data";
@@ -30,7 +30,7 @@ interface Props {
 
 export function DepositModal({ open, agent, onClose, onDeposited }: Props) {
   const { address } = useSession();
-  const { deposit, stage, error } = useDeposit();
+  const { send, stage, error } = useSendUsdc();
   const [amount, setAmount] = useState("1");
   const [balance, setBalance] = useState<bigint | null>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export function DepositModal({ open, agent, onClose, onDeposited }: Props) {
   async function submit() {
     if (!agent || amountError || busy) return;
     setSent(null);
-    const hash = await deposit(agent.address, amount.trim());
+    const hash = await send(agent.address, amount.trim());
     if (hash) {
       setSent(hash);
       onDeposited();

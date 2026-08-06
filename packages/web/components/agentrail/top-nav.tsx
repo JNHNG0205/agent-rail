@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   LogOut,
+  Send,
   ExternalLink,
 } from 'lucide-react'
 import { formatUsdc, truncateHex } from '@/lib/agentrail-data'
@@ -58,6 +59,7 @@ export function TopNav({
   connectedAddress,
   onConnectWallet,
   onDisconnectWallet,
+  onSendUsdc,
 }: {
   activeTab: TabId
   onTabChange: (tab: TabId) => void
@@ -67,6 +69,10 @@ export function TopNav({
   connectedAddress: `0x${string}` | null
   onConnectWallet: () => void
   onDisconnectWallet: () => void
+  /// Move USDC out of the viewer's own wallet, to anywhere. Offered here
+  /// because this menu is where the balance is, and that is where somebody
+  /// looks for the way to spend it.
+  onSendUsdc: () => void
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -185,6 +191,33 @@ export function TopNav({
                         </span>
                       </div>
                       )}
+
+                      {connectedAddress && walletStatus.usdcBalance !== null && walletStatus.usdcBalance > 0n && (
+
+                        <button
+
+                          type="button"
+
+                          onClick={() => {
+
+                            onSendUsdc()
+
+                            setDropdownOpen(false)
+
+                          }}
+
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+
+                        >
+
+                          <Send className="size-3.5" aria-hidden="true" />
+
+                          Send USDC
+
+                        </button>
+
+                      )}
+
 
                       <p className="px-2 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
                         {!connectedAddress

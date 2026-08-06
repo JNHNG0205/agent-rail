@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { TopNav, type TabId } from './top-nav'
 import { useSession } from '@/lib/session'
+import { SendModal } from '@/components/agentrail/send-modal'
 import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
@@ -15,6 +16,7 @@ export function AppShell() {
   // Sign-in state lives in the session, not here: it has to survive a reload,
   // and a component holding it would sign the user out on every refresh.
   const { signedIn, address, signIn, signOut } = useSession()
+  const [sending, setSending] = useState(false)
 
   return (
     <div className="min-h-dvh bg-background">
@@ -25,6 +27,7 @@ export function AppShell() {
         connectedAddress={address}
         onConnectWallet={signIn}
         onDisconnectWallet={() => void signOut()}
+        onSendUsdc={() => setSending(true)}
       />
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -45,6 +48,7 @@ export function AppShell() {
         </div>
       </main>
 
+      <SendModal open={sending} onClose={() => setSending(false)} />
     </div>
   )
 }
