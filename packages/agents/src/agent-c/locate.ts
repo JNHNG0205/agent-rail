@@ -38,12 +38,16 @@ export interface ProviderEndpoint {
 
 /// Where to fetch a job's brief and deliverable.
 ///
-/// Falls back to the single-provider URL when the directory has no match, so a
-/// standalone agent-b keeps working alongside the runtime.
+/// Returns null when the directory has no match. There used to be a fallback to
+/// a single configured provider URL, from the design where exactly one existed
+/// and its address was known before startup. Nothing serves that address now, so
+/// the fallback could only turn "the runtime is unreachable" into a fetch
+/// failure against a port nobody is listening on — a worse error, one step
+/// further from the cause.
 export async function locateProvider(
   providerAddress: string,
-  opts: { runtimeUrl: string; fallbackUrl: string },
-): Promise<ProviderEndpoint> {
+  opts: { runtimeUrl: string },
+): Promise<ProviderEndpoint | null> {
   try {
     const res = await fetch(`${opts.runtimeUrl}/agents`);
     if (res.ok) {
@@ -65,5 +69,5 @@ export async function locateProvider(
     // means this deployment has no hosted agents.
   }
 
-  return { base: opts.fallbackUrl, label: "agent-b" };
+  return null;
 }
