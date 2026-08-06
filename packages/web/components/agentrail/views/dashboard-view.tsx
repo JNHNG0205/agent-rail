@@ -6,11 +6,11 @@ import { AgentCard } from '@/components/agentrail/agent-card'
 import { JobEscrowManager } from '@/components/agentrail/job-escrow-manager'
 import { EventFeed } from '@/components/agentrail/event-feed'
 import { formatUsdc, type Agent } from '@/lib/agentrail-data'
-import { formatUsdc as exactUsdc } from '@agentrail/shared'
 import { useRegistry } from '@/hooks/useRegistry'
 import { useJobs } from '@/hooks/useJobs'
-import { useSession, useAuthedFetch } from '@/lib/session'
+import { useSession } from '@/lib/session'
 import { DepositModal } from '@/components/agentrail/deposit-modal'
+import { WithdrawModal } from '@/components/agentrail/withdraw-modal'
 import { Button } from '@/ui/button'
 import { JobState } from '@agentrail/shared'
 
@@ -52,41 +52,11 @@ export function DashboardView() {
   // Wider than the default: these figures are filtered down to your agents, and
   // a page of recent jobs can hold none of yours while yours sit just outside it.
   const { jobs: liveJobs } = useJobs({ limit: 200 })
-  const { signedIn, signIn, address } = useSession()
-  const authedFetch = useAuthedFetch()
+  const { signedIn, signIn } = useSession()
   // Which agent the deposit dialog is for; null when it is closed.
   const [depositing, setDepositing] = useState<Agent | null>(null)
-  const [withdrawing, setWithdrawing] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-
-  /// Take an agent's balance out to the signed-in person's wallet.
-  ///
-  /// The destination is not sent from here as a user input — it is the wallet
-  /// this session already holds, and the server independently checks it against
-  /// the wallets Privy signed for. Both have to agree.
-  async function handleWithdraw(agent: Agent) {
-    if (!address || !agent.id || agent.usdcBalance === undefined) return
-    setNotice(null)
-    setWithdrawing(agent.address)
-    try {
-      const res = await authedFetch(`/api/runtime/agents/${agent.id}/withdraw`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // exactUsdc, not the display format: this is the amount that moves.
-        // The rounded one would leave fractions behind, and it carries a
-        // " USDC" suffix that parseUsdc rejects outright.
-        body: JSON.stringify({ to: address, amountUsdc: exactUsdc(agent.usdcBalance) }),
-      })
-      const body = (await res.json()) as { error?: string; amount?: string }
-      if (body.error) throw new Error(body.error)
-      setNotice(`Sent ${formatUsdc(BigInt(body.amount ?? '0'))} USDC to your wallet.`)
-      await refetch()
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'the withdrawal did not go through')
-    } finally {
-      setWithdrawing(null)
-    }
-  }
+  // Which agent each dialog is for; null when closed.
+  const [withdrawing, setWithdrawing] = useState<Agent | null>(null)
 
   // Your dashboard, not the system's. The marketplace is on the Agents tab,
   // where seeing everyone is the point; here, other people's agents and their
@@ -127,12 +97,6 @@ export function DashboardView() {
         </div>
       </section>
 
-      {notice && (
-        <p className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-          {notice}
-        </p>
-      )}
-
       <section aria-label="Agent profiles">
         {!signedIn ? (
           <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-6">
@@ -159,13 +123,20 @@ export function DashboardView() {
                 key={agent.address}
                 agent={agent}
                 showIdentity={false}
-                onWithdraw={withdrawing ? undefined : handleWithdraw}
+                onWithdraw={setWithdrawing}
                 onDeposit={setDepositing}
               />
             ))}
           </div>
         )}
       </section>
+
+      <WithdrawModal
+        open={withdrawing !== null}
+        agent={withdrawing}
+        onClose={() => setWithdrawing(null)}
+        onWithdrawn={() => setTimeout(() => void refetch(), 6000)}
+      />
 
       <DepositModal
         open={depositing !== null}
