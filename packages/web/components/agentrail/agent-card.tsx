@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, BadgeCheck, Bot, Store } from 'lucide-react'
+import { CATEGORY_LABELS, type ServiceCategory } from '@agentrail/shared'
 import { type Agent, formatUsdc, truncateHex } from '@/lib/agentrail-data'
 import { CopyButton } from './copy-button'
 import { cn } from '@/lib/utils'
@@ -122,6 +123,11 @@ export function AgentCard({
         <div className="mt-4 rounded-xl border border-border bg-secondary/40 p-3">
           <p className="flex items-center gap-1.5 text-[11px] tracking-wide text-muted-foreground uppercase">
             <Store className="size-3" /> Sells for {agent.service.priceUsdc} USDC
+            {agent.service.category && (
+              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] normal-case">
+                {CATEGORY_LABELS[agent.service.category as ServiceCategory] ?? agent.service.category}
+              </span>
+            )}
           </p>
           <p className="mt-1 text-sm text-foreground">{agent.service.summary}</p>
         </div>

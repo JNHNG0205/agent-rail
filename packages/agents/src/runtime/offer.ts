@@ -1,4 +1,11 @@
-import { DELIVERABLE_KINDS, isDeliverableKind, type DeliverableKind } from "@agentrail/shared";
+import {
+  DELIVERABLE_KINDS,
+  SERVICE_CATEGORIES,
+  isDeliverableKind,
+  isServiceCategory,
+  type DeliverableKind,
+  type ServiceCategory,
+} from "@agentrail/shared";
 import { completeJson, type JsonSchema } from "../lib/llm.js";
 import type { ServiceOffer } from "./store.js";
 
@@ -17,6 +24,7 @@ interface RawOffer {
   summary: string;
   priceUsdc: string;
   deliverable: string;
+  category: string;
   requirements: string[];
 }
 
@@ -31,6 +39,12 @@ const OFFER_SCHEMA = {
       type: "string",
       description: "A whole number of USDC between 1 and 100, as a string.",
     },
+    category: {
+      type: "string",
+      enum: [...SERVICE_CATEGORIES],
+      description:
+        "The kind of work, for people browsing a directory. Judge by what is produced, not by the file format — code delivered as Markdown is still code.",
+    },
     deliverable: {
       type: "string",
       enum: [...DELIVERABLE_KINDS],
@@ -44,7 +58,7 @@ const OFFER_SCHEMA = {
         "Three or four short statements an evaluator can check by looking at the delivered file. Each must be objectively true or false — 'shows the title text', not 'looks professional'.",
     },
   },
-  required: ["summary", "priceUsdc", "deliverable", "requirements"],
+  required: ["summary", "priceUsdc", "deliverable", "category", "requirements"],
   additionalProperties: false,
 } as const satisfies JsonSchema;
 
@@ -57,6 +71,7 @@ function isRawOffer(value: unknown): value is RawOffer {
     typeof v.priceUsdc === "string" &&
     /^\d+(\.\d+)?$/.test(v.priceUsdc) &&
     isDeliverableKind(v.deliverable) &&
+    isServiceCategory(v.category) &&
     Array.isArray(v.requirements) &&
     v.requirements.length >= 2 &&
     v.requirements.every((r) => typeof r === "string" && r.length > 0)
@@ -96,6 +111,7 @@ export async function proposeOffer(name: string, purpose: string): Promise<Servi
         summary: "One poster delivered as a self-contained SVG document",
         priceUsdc: "10",
         deliverable: "svg",
+        category: "design",
         requirements: [
           "shows the title text",
           "shows the subtitle text",
@@ -111,6 +127,7 @@ export async function proposeOffer(name: string, purpose: string): Promise<Servi
     summary: raw.summary,
     priceUsdc: String(Math.max(1, Math.min(100, Math.round(Number(raw.priceUsdc))))),
     deliverable: raw.deliverable as DeliverableKind,
+    category: raw.category as ServiceCategory,
     // Four is the ceiling: each one is another chance to reject, and a provider
     // that fails most of its jobs is not a demonstration of anything.
     requirements: raw.requirements.slice(0, 4),

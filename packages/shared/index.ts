@@ -13,6 +13,9 @@ export {
   toJob,
   DELIVERABLE_KINDS,
   isDeliverableKind,
+  SERVICE_CATEGORIES,
+  CATEGORY_LABELS,
+  isServiceCategory,
 } from "./src/types";
 export type {
   Agent,
@@ -24,6 +27,7 @@ export type {
   ContractName,
   JobBrief,
   DeliverableKind,
+  ServiceCategory,
   DeliverableReview,
   ChainEvent,
 } from "./src/types";

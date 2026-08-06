@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { generatePrivateKey } from "viem/accounts";
 import type { Hex } from "viem";
-import { CHAIN_ID, type DeliverableKind } from "@agentrail/shared";
+import { CHAIN_ID, type DeliverableKind, type ServiceCategory } from "@agentrail/shared";
 import { accountFor, type AgentAccount } from "../lib/wallet.js";
 import { query } from "./db.js";
 
@@ -27,6 +27,9 @@ export interface ServiceOffer {
   /// svg, which is what those agents produce. Declaring it required would make
   /// the type lie about what comes back from the database.
   deliverable?: DeliverableKind;
+  /// What kind of work this is, for browsing. Optional for the same reason as
+  /// deliverable: rows written before it existed have no such key.
+  category?: ServiceCategory;
   /// The terms the evaluator grades against. Published, so a client adopts them
   /// verbatim and what was sold cannot drift from what is judged.
   requirements: string[];

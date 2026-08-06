@@ -6,6 +6,7 @@ import { AgentCard } from '@/components/agentrail/agent-card'
 import { CreateProviderModal } from '@/components/agentrail/create-provider-modal'
 import { CopyButton } from '@/components/agentrail/copy-button'
 import { useRegistry } from '@/hooks/useRegistry'
+import { CATEGORY_LABELS, SERVICE_CATEGORIES, type ServiceCategory } from '@agentrail/shared'
 import { truncateHex } from '@/lib/agentrail-data'
 import type { Agent } from '@/lib/agentrail-data'
 
@@ -56,6 +57,7 @@ export function RegistryView() {
   const { agents, loading, error, refetch } = useRegistry()
   const [createAgentOpen, setCreateAgentOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<ServiceCategory | 'all'>('all')
 
   const { providers, clients, unhosted } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -66,10 +68,15 @@ export function RegistryView() {
       (a.service?.summary.toLowerCase().includes(q) ?? false)
 
     const visible = agents.filter(matches)
+    // Uncategorised agents fall under "other" rather than vanishing when a
+    // filter is applied — they predate categories and are still hireable.
+    const inCategory = (a: Agent) =>
+      category === 'all' || (a.service?.category ?? 'other') === category
+
     return {
       // Cheapest first — the same order a client agent reads the directory in.
       providers: visible
-        .filter((a) => a.role === 'provider' && a.service)
+        .filter((a) => a.role === 'provider' && a.service && inCategory(a))
         .sort((a, b) => Number(a.service!.priceUsdc) - Number(b.service!.priceUsdc)),
       clients: visible.filter((a) => a.role === 'client'),
       // Registered on chain, hosted by nobody: nothing can act as these.
@@ -77,7 +84,17 @@ export function RegistryView() {
         .filter((a) => a.role !== 'provider' && a.role !== 'client')
         .sort((a, b) => (a.tokenId ?? 0) - (b.tokenId ?? 0)),
     }
-  }, [agents, query])
+  }, [agents, query, category])
+
+  const providerCounts = useMemo(() => {
+    const sellers = agents.filter((a) => a.role === 'provider' && a.service)
+    const byCategory: Partial<Record<ServiceCategory, number>> = {}
+    for (const a of sellers) {
+      const c = (a.service?.category ?? 'other') as ServiceCategory
+      byCategory[c] = (byCategory[c] ?? 0) + 1
+    }
+    return { total: sellers.length, byCategory }
+  }, [agents])
 
   const total = providers.length + clients.length + unhosted.length
 
@@ -116,6 +133,33 @@ export function RegistryView() {
             aria-label="Search agents"
             className="w-full rounded-lg border border-border bg-background py-2 pr-3 pl-9 text-sm outline-none focus-visible:border-ring"
           />
+        </div>
+      )}
+
+      {providerCounts.total > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {(['all', ...SERVICE_CATEGORIES] as const).map((c) => {
+            const n = c === 'all' ? providerCounts.total : (providerCounts.byCategory[c] ?? 0)
+            // A filter that leads to an empty page is not worth offering.
+            if (n === 0 && c !== 'all') return null
+            const active = category === c
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                aria-pressed={active}
+                className={
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors ' +
+                  (active
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-secondary')
+                }
+              >
+                {c === 'all' ? 'All' : CATEGORY_LABELS[c]} <span className="tabular-nums">{n}</span>
+              </button>
+            )
+          })}
         </div>
       )}
 

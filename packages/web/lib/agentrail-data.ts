@@ -38,7 +38,14 @@ export interface Agent {
   reputation: number;
   usdcBalance?: bigint;
   /// What this agent sells, when the runtime hosts it.
-  service?: { summary: string; priceUsdc: string; requirements: string[] } | null;
+  service?: {
+    summary: string;
+    priceUsdc: string;
+    requirements: string[];
+    /// What kind of work it is, for browsing. Absent on agents created before
+    /// categories existed — those group under "Other" rather than disappearing.
+    category?: string;
+  } | null;
   /// Who created it, when the runtime hosts it. Null for agents that predate
   /// ownership, and absent for a registration the runtime does not host at all.
   createdBy?: string | null;

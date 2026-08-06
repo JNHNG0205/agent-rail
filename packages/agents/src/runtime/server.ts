@@ -1,6 +1,7 @@
 import { createServer, type Server, type IncomingMessage } from "node:http";
 import {
   isDeliverableKind,
+  isServiceCategory,
   parseUsdc,
   type JobBrief,
 } from "@agentrail/shared";
@@ -95,6 +96,9 @@ export function isServiceOffer(value: unknown): value is ServiceOffer {
     // kinds existed produces, and rejecting them would strand soulbound
     // identities that cannot be minted again.
     (v.deliverable === undefined || isDeliverableKind(v.deliverable)) &&
+    // Absent means uncategorised, for the same reason as deliverable: agents
+    // created before this existed have no such key and must keep working.
+    (v.category === undefined || isServiceCategory(v.category)) &&
     Array.isArray(v.requirements) &&
     v.requirements.length > 0 &&
     v.requirements.every((r) => typeof r === "string")

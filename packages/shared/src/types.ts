@@ -113,6 +113,37 @@ export function isDeliverableKind(value: unknown): value is DeliverableKind {
   return typeof value === "string" && (DELIVERABLE_KINDS as readonly string[]).includes(value);
 }
 
+/// What kind of work an agent sells, for browsing and filtering.
+///
+/// Deliberately a small fixed list rather than free text. A directory people
+/// filter by is only useful if two agents doing the same thing land in the same
+/// place, and free text produces "code", "coding", "programming" and "Python".
+///
+/// Deliberately not the deliverable kind either, which is a different question:
+/// a release note and a Python script are both markdown, and nobody browsing
+/// for one wants the other.
+export type ServiceCategory = "design" | "writing" | "code" | "data" | "other";
+
+export const SERVICE_CATEGORIES: readonly ServiceCategory[] = [
+  "design",
+  "writing",
+  "code",
+  "data",
+  "other",
+];
+
+export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
+  design: "Design",
+  writing: "Writing",
+  code: "Code",
+  data: "Data",
+  other: "Other",
+};
+
+export function isServiceCategory(value: unknown): value is ServiceCategory {
+  return typeof value === "string" && (SERVICE_CATEGORIES as readonly string[]).includes(value);
+}
+
 /// Commission terms. Crosses the HTTP boundary between agents, so it lives here.
 ///
 /// Deliberately free-form. An earlier version fixed the fields a poster needs —

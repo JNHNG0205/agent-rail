@@ -31,7 +31,12 @@ interface RuntimeAgent {
   name: string;
   role: "client" | "provider";
   address: `0x${string}`;
-  service: { summary: string; priceUsdc: string; requirements: string[] } | null;
+  service: {
+    summary: string;
+    priceUsdc: string;
+    requirements: string[];
+    category?: string;
+  } | null;
   createdBy: string | null;
 }
 
