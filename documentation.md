@@ -291,10 +291,14 @@ one does not.
 ### 5.1 Start it
 
 ```bash
-npm run db:up                 # PostgreSQL, if it is not already up
-npm run seed:base-sepolia     # once, to register your agents and mint their USDC
-npm run dev:base-sepolia      # everything
+npm run seed:base-sepolia     # once only — registers your agents, mints their USDC
+npm run dev:base-sepolia      # everything, every time after that
 ```
+
+The second command is the whole system. It starts PostgreSQL for you, so there
+is no separate database step; seeding is the one thing it does not do on a
+public chain, because registering an identity is permanent and not something a
+start-up script should repeat.
 
 `dev.sh` starts PostgreSQL, checks the deployed contracts and every account's
 balance and registration, then runs the indexer, the agent runtime, the
