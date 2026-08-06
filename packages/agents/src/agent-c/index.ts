@@ -14,7 +14,6 @@ import { locateProvider } from "./locate.js";
 
 interface Endpoints {
   runtimeUrl: string;
-  fallbackUrl: string;
 }
 
 /// Agent C (evaluator) entry point: watch for submitted deliverables, fetch what
@@ -61,6 +60,15 @@ async function handleSubmission(jobId: bigint, endpoints: Endpoints): Promise<vo
   // Resolve where this provider serves. Which agent produced the work is only
   // known now, from job.provider — it cannot be configured ahead of time.
   const provider = await locateProvider(job.provider, endpoints);
+  if (!provider) {
+    // Says which of the two things went wrong. A job whose provider no hosted
+    // agent serves is permanent and there is nothing to retry; a runtime that
+    // is merely down will resolve on the next sweep.
+    console.error(
+      `[agent-c] job ${jobId}: no hosted agent serves ${job.provider} — is the runtime running?`,
+    );
+    return;
+  }
 
   const briefRes = await fetch(`${provider.base}/commission/${jobId}`);
   if (!briefRes.ok) {
@@ -143,7 +151,6 @@ async function main() {
   const evaluator = await agentC();
   const endpoints: Endpoints = {
     runtimeUrl: process.env.AGENT_RUNTIME_URL ?? "http://127.0.0.1:4030",
-    fallbackUrl: process.env.AGENT_B_URL ?? "http://127.0.0.1:4020",
   };
   console.log(
     `[agent-c] evaluator ${evaluator.address}, runtime at ${endpoints.runtimeUrl}`,
