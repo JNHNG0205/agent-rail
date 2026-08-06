@@ -130,13 +130,19 @@ unacceptable for anything else. Never fund them on a real network.
 
 #### What each account is for
 
-| Account | Needs ETH | Role |
-|---|---|---|
-| **Deployer** | ~0.05 | Deploys the contracts. **Never an agent.** |
-| **Agent C** | ~0.05 | The evaluator. Signs every verdict. |
-| **Treasury** | ~0.05 | Pays each new agent's first gas. |
-| Agent A | no | Seed client — funded by the seed script |
-| Agent B | no | Seed provider — funded by the seed script |
+**Two are required.** The rest are printed because they have uses, and none is
+needed to run the system.
+
+| Account | Required | Needs ETH | Role |
+|---|---|---|---|
+| **Agent C** | yes | ~0.05 | The evaluator. Signs every verdict. |
+| **Treasury** | yes | ~0.05 | Pays each new agent's first gas. |
+| Deployer | no | — | Only to deploy your own contracts (5.4) |
+| Agent A | no | — | Seed client from an earlier design |
+| Agent B | no | — | Seed provider from an earlier design |
+
+Agents A and B predate the marketplace. Users create their own agents now, and
+the treasury funds and registers each one, so nothing depends on the seeds.
 
 The separation is the design, not caution. The deployer owns `JobContract` and
 `ReputationRegistry`, and an owner can re-point the identity registry, the
@@ -145,10 +151,7 @@ rewrite the rules constraining its own job. The evaluator's key signs the
 verdict that releases money, so a client holding it could approve its own
 payment, which is the single thing this design exists to prevent.
 
-**If you use the already-deployed contracts** (section 5.1) you need no deployer
-at all — only Agent C and the Treasury.
-
-#### Funding the three accounts
+#### Funding the two accounts
 
 Any Base Sepolia faucet works. These need no prior balance and no Coinbase
 account:
@@ -163,7 +166,7 @@ Paste each address in and claim. Some faucets — Alchemy's among them — requi
 balance on Ethereum mainnet before they will send anything; if you hit that,
 use one of the three above instead.
 
-0.05 ETH per account is enough for a demonstration, and it is worth knowing
+0.05 ETH in each of the two is enough for a demonstration, and it is worth knowing
 what it buys rather than assuming it is unlimited. The treasury pays out:
 
 - **0.004 ETH per agent created** — every provider, and every new user's
@@ -291,14 +294,17 @@ one does not.
 ### 5.1 Start it
 
 ```bash
-npm run seed:base-sepolia     # once only — registers your agents, mints their USDC
-npm run dev:base-sepolia      # everything, every time after that
+npm run dev:base-sepolia
 ```
 
-The second command is the whole system. It starts PostgreSQL for you, so there
-is no separate database step; seeding is the one thing it does not do on a
-public chain, because registering an identity is permanent and not something a
-start-up script should repeat.
+That is the whole system: PostgreSQL, the indexer, the agent runtime, the
+evaluator and the web application. There is no separate database step and no
+seeding step — a user's agents are created and registered from the interface, so
+nothing needs registering in advance.
+
+```bash
+npm run seed:base-sepolia     # optional — registers the two seed agents
+```
 
 `dev.sh` starts PostgreSQL, checks the deployed contracts and every account's
 balance and registration, then runs the indexer, the agent runtime, the

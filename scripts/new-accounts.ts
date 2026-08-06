@@ -1,6 +1,11 @@
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-/// Generate the five testnet accounts this project needs, ready to paste.
+/// Generate the testnet accounts, ready to paste.
+///
+/// Two are required — the evaluator and the treasury. The other three are
+/// printed because they have uses: a deployer if you deploy your own contracts,
+/// and two seed agents from the design that preceded the marketplace. Neither is
+/// needed to run the system, and preflight no longer insists on them.
 ///
 /// "Create five accounts in a wallet and export their private keys" is a page of
 /// clicking and a good chance of pasting the wrong one into the wrong file. This
@@ -46,14 +51,14 @@ const ROLES: Role[] = [
     env: "BASE_SEPOLIA_AGENT_A_PRIVATE_KEY",
     file: ".env",
     needsEth: "—",
-    why: "seed client, funded by the seed script",
+    why: "optional seed client — users create their own agents",
   },
   {
     name: "Agent B",
     env: "BASE_SEPOLIA_AGENT_B_PRIVATE_KEY",
     file: ".env",
     needsEth: "—",
-    why: "seed provider, funded by the seed script",
+    why: "optional seed provider — users create their own agents",
   },
   {
     name: "Agent C",
@@ -76,11 +81,11 @@ const generated = ROLES.map((role) => {
   return { role, privateKey, address: privateKeyToAccount(privateKey).address };
 });
 
-console.log("\nFive testnet accounts. TESTNET ONLY — never fund these on a real network.\n");
+console.log("\nTestnet accounts. TESTNET ONLY — never fund these on a real network.\n");
 
-console.log("Fund these three from a Base Sepolia faucet:\n");
+console.log("Only two are needed. Fund these from a Base Sepolia faucet:\n");
 for (const { role, address } of generated) {
-  if (role.needsEth !== "—") {
+  if (role.needsEth !== "—" && role.name !== "Deployer") {
     console.log(`  ${role.name.padEnd(10)} ${address}   ${role.needsEth} ETH   (${role.why})`);
   }
 }
@@ -88,7 +93,10 @@ console.log("\n  https://portal.cdp.coinbase.com/products/faucet   0.1 ETH per d
 console.log("  https://faucet.quicknode.com/base/sepolia         no account needed");
 console.log("  https://www.ethereum-ecosystem.com/faucets/base-sepolia   0.5 ETH per day\n");
 
-console.log("The other two need no ETH — `npm run seed:base-sepolia` funds them.\n");
+console.log("The deployer is needed only to deploy your own contracts — the ones this");
+console.log("repository points at are already deployed and verified. Agents A and B are");
+console.log("optional seeds from an earlier design; users create their own agents, which");
+console.log("the treasury funds automatically.\n");
 
 console.log("─".repeat(72));
 console.log("\nPaste into .env\n");

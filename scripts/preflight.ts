@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import { createPublicClient, http, formatEther, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
@@ -22,12 +23,27 @@ import {
 /// as a call to the zero address returning nothing. Checking up front turns all
 /// of those into one sentence naming what to fix.
 
+// Also read the agents' own file. Every other consumer reads exactly one env
+// file, and that rule is what stops a value being set where nothing looks for
+// it — but this script checks readiness rather than consuming configuration,
+// and the treasury it must verify legitimately lives with the agents that use
+// it. Read second and without override, so the root file still wins.
+loadEnv({ path: "packages/agents/.env" });
+
 const MIN_GAS = 2_000_000_000_000_000n; // 0.002 ETH — a few dozen transactions.
 
+/// Only the evaluator is required. Agents A and B are seeds from the two-agent
+/// design that preceded the marketplace: users create their own agents now, and
+/// the runtime funds and registers each one as it goes. Demanding all three made
+/// setting this up a matter of three faucet claims instead of one, for two
+/// accounts that nothing then uses.
+///
+/// They are still checked when present, because a half-configured seed is worth
+/// reporting — just not worth refusing to start over.
 const AGENTS = [
-  { role: "A", env: "BASE_SEPOLIA_AGENT_A_PRIVATE_KEY" },
-  { role: "B", env: "BASE_SEPOLIA_AGENT_B_PRIVATE_KEY" },
-  { role: "C", env: "BASE_SEPOLIA_AGENT_C_PRIVATE_KEY" },
+  { role: "C", env: "BASE_SEPOLIA_AGENT_C_PRIVATE_KEY", required: true },
+  { role: "A", env: "BASE_SEPOLIA_AGENT_A_PRIVATE_KEY", required: false },
+  { role: "B", env: "BASE_SEPOLIA_AGENT_B_PRIVATE_KEY", required: false },
 ] as const;
 
 const problems: string[] = [];
@@ -66,10 +82,10 @@ async function main() {
     }
   }
 
-  for (const { role, env } of AGENTS) {
+  for (const { role, env, required } of AGENTS) {
     const key = process.env[env];
     if (!key) {
-      problems.push(`${env} is not set`);
+      if (required) problems.push(`${env} is not set — the evaluator cannot sign without it`);
       continue;
     }
     const account = privateKeyToAccount(key as `0x${string}`);
@@ -95,15 +111,39 @@ async function main() {
     const held = `${formatUnits(usdc as bigint, 6)} USDC`;
     console.log(`[preflight] ${label.padEnd(20)} ${gas.padEnd(12)} ${held.padEnd(14)} registered=${registered}`);
 
-    if (!registered) {
+    if (!registered && required) {
       problems.push(`agent ${role} (${account.address}) is not registered — run npm run seed:base-sepolia`);
     }
-    if (balance < MIN_GAS) {
+    if (balance < MIN_GAS && required) {
       problems.push(`agent ${role} (${account.address}) has only ${gas} — fund it from a faucet`);
     }
-    // Only the client ever spends USDC, so an empty provider or evaluator is fine.
+    // Only a client ever spends USDC, so an empty provider or evaluator is fine.
+    // A seeded client with none is worth saying, without being fatal — nothing
+    // in the marketplace depends on it.
     if (role === "A" && (usdc as bigint) === 0n) {
-      problems.push(`agent A holds no USDC — run npm run seed:base-sepolia`);
+      console.log("[preflight] note: seed agent A holds no USDC (harmless — users create their own agents)");
+    }
+  }
+
+  // The treasury pays every new agent's first gas. Nothing checked it, and an
+  // empty one fails at agent creation with a bundler error about a sender
+  // balance — which reads as a code fault rather than an empty wallet.
+  const treasuryKey = process.env.BASE_SEPOLIA_TREASURY_PRIVATE_KEY;
+  if (!treasuryKey) {
+    problems.push(
+      "BASE_SEPOLIA_TREASURY_PRIVATE_KEY is not set — no new agent could be funded",
+    );
+  } else {
+    const treasury = privateKeyToAccount(treasuryKey as `0x${string}`);
+    const balance = await client.getBalance({ address: treasury.address });
+    const perAgent = 4_000_000_000_000_000n; // 0.004 ETH, what onboarding sends
+    console.log(
+      `[preflight] Treasury${" ".repeat(13)}${Number(formatEther(balance)).toFixed(4)} ETH   funds ${balance / perAgent} more agent(s)`,
+    );
+    if (balance < perAgent) {
+      problems.push(
+        `treasury (${treasury.address}) holds ${formatEther(balance)} ETH — too little to onboard an agent`,
+      );
     }
   }
 
