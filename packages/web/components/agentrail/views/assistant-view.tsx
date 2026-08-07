@@ -400,7 +400,7 @@ export function AssistantView() {
           </p>
           {providers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              None yet — create a provider agent in the Registry tab.
+              None yet — create one on the Marketplace tab, then I will have somebody to hire.
             </p>
           ) : (
             <ul className="flex flex-col gap-3">

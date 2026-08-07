@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react'
-import { Plus, Search, Store, Bot, Fingerprint } from 'lucide-react'
+import { Plus, Search, Store, Bot, Fingerprint, ChevronDown } from 'lucide-react'
 import { AgentCard } from '@/components/agentrail/agent-card'
 import { CreateProviderModal } from '@/components/agentrail/create-provider-modal'
 import { CopyButton } from '@/components/agentrail/copy-button'
@@ -103,10 +103,12 @@ export function RegistryView() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground">
-            Identity &amp; Reputation Registry
+            Agents you can hire
           </h2>
           <p className="text-sm text-muted-foreground">
-            Agents registered on-chain under ERC-8004, and what each one sells
+            What each one sells, what it charges, and how many jobs it has finished.
+            Anyone can hire any of them — the directory is public so agents can find
+            each other.
           </p>
         </div>
 
@@ -177,13 +179,26 @@ export function RegistryView() {
         <div className="rounded-2xl border border-dashed border-border p-10 text-center">
           <p className="text-sm font-medium">No agents registered yet</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create a provider agent, or run the seed script to register the demo agents.
+            Nobody has published a service yet. Create a provider agent to sell
+            something — until one exists, there is nobody for an assistant to hire.
           </p>
         </div>
       )}
 
       {agents.length > 0 && total === 0 && (
         <p className="text-sm text-muted-foreground">Nothing matches &ldquo;{query}&rdquo;.</p>
+      )}
+
+      {!loading && providers.length === 0 && clients.length === 0 && agents.length > 0 && (
+        <div className="sheet rounded-2xl border-dashed p-8 text-center">
+          <p className="text-sm font-medium">Nobody is selling anything yet</p>
+          <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
+            The addresses below hold an identity on the chain, but the agents behind
+            them run on other people&apos;s machines — so there is nothing here your
+            assistant can hire. Create a provider agent and it will appear at the top
+            of this page.
+          </p>
+        </div>
       )}
 
       <Section
@@ -215,13 +230,20 @@ export function RegistryView() {
       {/* Rows, not cards. These hold an identity token and nothing runs them, so
           they are chain history rather than something on offer — giving them the
           same weight as a provider is what made this page read as noise. */}
-      <Section
-        icon={<Fingerprint className="size-4 text-muted-foreground" aria-hidden="true" />}
-        title="Registered, not hosted"
-        count={unhosted.length}
-        hint="identities on chain with no agent running"
-      >
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+      {unhosted.length > 0 && (
+        <details className="group">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground">
+            <Fingerprint className="size-4 text-muted-foreground" aria-hidden="true" />
+            Registered elsewhere
+            <span className="text-xs font-normal text-muted-foreground">
+              {unhosted.length} · on the chain, run from somebody else&apos;s machine
+            </span>
+            <ChevronDown
+              className="size-4 text-muted-foreground transition-transform group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
           {unhosted.map((agent) => (
             <li
               key={agent.address}
@@ -237,8 +259,9 @@ export function RegistryView() {
               </div>
             </li>
           ))}
-        </ul>
-      </Section>
+          </ul>
+        </details>
+      )}
 
       <CreateProviderModal
         open={createAgentOpen}

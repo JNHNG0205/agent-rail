@@ -259,7 +259,7 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
 export function JobsView() {
   const [filter, setFilter] = useState<StatusKey | 'All'>('All')
   const [selected, setSelected] = useState<JobRow | null>(null)
-  const { jobs: liveJobs } = useJobs()
+  const { jobs: liveJobs, loading, error } = useJobs()
   // agentLabel only knows the seeded three; every agent a user created is just
   // an address to it. The registry has the names people actually chose.
   const { agents } = useRegistry()
@@ -307,14 +307,24 @@ export function JobsView() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          Escrow Jobs
+          All jobs on the network
         </h1>
         <p className="text-sm text-muted-foreground">
-          ERC-8183 job state machine across all historical and active escrows.
+          Everyone&apos;s, not only yours. The contracts are shared, so every job
+          anyone has ever run is public and permanent here. For the ones you
+          commissioned, see your Dashboard.
         </p>
       </div>
 
       {/* Filters */}
+      {error && (
+        <p className="sheet px-4 py-3 text-sm text-destructive">
+          Could not load the job history. The indexer or its database is not
+          answering — the chain still has every job; this page just cannot read
+          the copy it queries.
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => {
           const isActive = f === filter
@@ -364,6 +374,19 @@ export function JobsView() {
             </tr>
           </thead>
           <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {loading
+                    ? 'Loading the job history…'
+                    : error
+                      ? 'Nothing to show while the history is unavailable.'
+                      : allJobsList.length === 0
+                        ? 'No jobs have been run on this network yet. Commission one from the Assistant tab.'
+                        : `No ${filter === 'All' ? '' : statusByKey(filter as StatusKey).label.toLowerCase() + ' '}jobs match that filter.`}
+                </td>
+              </tr>
+            )}
             {filtered.map((job) => (
               <tr
                 key={job.id}

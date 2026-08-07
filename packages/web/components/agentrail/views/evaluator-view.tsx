@@ -66,10 +66,11 @@ export function EvaluatorView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">Evaluator decisions</h2>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">Why each job paid out</h2>
         <p className="text-sm text-muted-foreground">
-          Every settlement is an off-chain judgement, signed by the evaluator and verified on
-          chain by EvaluatorModule before any money moves.
+          A third agent grades every delivery — never the one that ordered the work,
+          and never the one that made it. It signs its decision, and the contract
+          checks that signature before releasing a penny.
         </p>
       </div>
 

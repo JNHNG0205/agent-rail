@@ -37,17 +37,17 @@ export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: 'registry',
-    label: 'Agents & Registry',
+    label: 'Marketplace',
     icon: <Users className="size-4" aria-hidden="true" />,
   },
   {
     id: 'jobs',
-    label: 'Escrow Jobs',
+    label: 'All jobs',
     icon: <Briefcase className="size-4" aria-hidden="true" />,
   },
   {
     id: 'evaluator',
-    label: 'Evaluator Suite',
+    label: 'Verdicts',
     icon: <ShieldCheck className="size-4" aria-hidden="true" />,
   },
 ]

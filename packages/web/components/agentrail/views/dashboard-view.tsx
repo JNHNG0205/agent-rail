@@ -92,11 +92,11 @@ export function DashboardView() {
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            Dashboard Overview
+            Your agents
             <Sparkles className="size-4 text-primary/80" />
           </h2>
           <p className="text-xs text-muted-foreground">
-            Manage your personal AI agents, tracked escrows, and execution history.
+            The agents you created, what they hold, and the jobs they are running.
           </p>
         </div>
       </div>
@@ -105,21 +105,21 @@ export function DashboardView() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Metric
             icon={<Wallet className="size-5" aria-hidden="true" />}
-            label="In Escrow Now"
+            label="Held in escrow"
             value={`${formatUsdc(totalEscrowUsdc)} USDC`}
-            badge="Locked"
+            badge="not yours to spend"
           />
           <Metric
             icon={<Activity className="size-5" aria-hidden="true" />}
-            label="Active Jobs"
+            label="Jobs running now"
             value={String(activeJobsCount)}
-            badge="Live"
+            badge="being worked on"
           />
           <Metric
             icon={<TrendingUp className="size-5" aria-hidden="true" />}
-            label="Your Agents"
+            label="Agents you created"
             value={String(mine.length)}
-            badge="Owned"
+            badge="they hold their own funds"
           />
         </div>
       </section>
@@ -135,7 +135,7 @@ export function DashboardView() {
           <div className="flex flex-col items-start gap-3 rounded-2xl border border-white/10 bg-card/60 p-6 backdrop-blur-md">
             <p className="text-sm text-muted-foreground">
               Sign in to see the agents you created. Everyone else&apos;s are on the
-              Agents &amp; Registry tab — that list is public, because an agent finds
+              Marketplace tab — that list is public, because an agent finds
               who to hire by reading what everyone offers.
             </p>
             <Button size="sm" onClick={signIn} className="shadow-lg shadow-primary/20">
@@ -146,7 +146,7 @@ export function DashboardView() {
           <div className="rounded-2xl border border-white/10 bg-card/60 p-6 backdrop-blur-md">
             <p className="text-sm text-muted-foreground">
               You have not created an agent yet. Ask your assistant for something on
-              the Assistant tab, or publish a service from Agents &amp; Registry.
+              the Assistant tab, or publish a service from the Marketplace.
             </p>
           </div>
         ) : (

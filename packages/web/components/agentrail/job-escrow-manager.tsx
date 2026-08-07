@@ -6,6 +6,7 @@ import { type JobStep, formatUsdc } from '@/lib/agentrail-data'
 import { agentLabel } from '@agentrail/shared'
 import { useJobs } from '@/hooks/useJobs'
 import { JOB_STATE_LABELS } from '@agentrail/shared'
+import { StatePill } from '@/components/agentrail/state-pill'
 import { ProgressTracker } from './progress-tracker'
 import { CopyButton } from './copy-button'
 import { cn } from '@/lib/utils'
@@ -87,16 +88,13 @@ export function JobEscrowManager() {
             id="escrow-heading"
             className="text-base font-bold tracking-tight text-foreground"
           >
-            ERC-8183 Job Escrow Manager
+            The money for this job
           </h2>
           <p className="font-mono text-xs text-muted-foreground">
             {job.buyer} → {job.worker} · opened {job.createdAt}
           </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 shadow-sm">
-          <Lock className="size-3.5" aria-hidden="true" />
-          Escrow Locked
-        </span>
+        <StatePill state={liveJob.state} outcome={liveJob.outcome ?? null} />
       </div>
 
       {/* Progress tracker */}
