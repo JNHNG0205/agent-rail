@@ -97,6 +97,28 @@ export function initDb(): Promise<void> {
         PRIMARY KEY (chain_id, job_id)
       )
     `);
+    // Why each job settled or refunded, in the evaluator's own words.
+    //
+    // The chain records that a verdict was signed and what it decided; it does
+    // not record the reasoning, and neither did anything else — the sentence
+    // went to the evaluator's stdout and nowhere a person could reach it. That
+    // left the one question an escrow raises, "why did this refund?", answerable
+    // only by whoever happened to be watching a terminal.
+    //
+    // Not authoritative. The money moved on the signature; this is the note that
+    // came with it, and if the two ever disagree the chain is right.
+    await getPool().query(`
+      CREATE TABLE IF NOT EXISTS ${SCHEMA}.job_review (
+        chain_id   integer     NOT NULL,
+        job_id     text        NOT NULL,
+        approve    boolean     NOT NULL,
+        reason     text        NOT NULL,
+        present    jsonb       NOT NULL DEFAULT '[]'::jsonb,
+        missing    jsonb       NOT NULL DEFAULT '[]'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (chain_id, job_id)
+      )
+    `);
     // An address may hold only one identity, so two agents cannot share one.
     await getPool().query(
       `CREATE UNIQUE INDEX IF NOT EXISTS agent_address_idx ON ${SCHEMA}.agent (chain_id, lower(address))`,

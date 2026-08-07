@@ -8,6 +8,7 @@ import {
 import { publicClient, agentC } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
 import { review } from "./review.js";
+import { rememberReview } from "../runtime/reviews.js";
 import { approve } from "./approve.js";
 import { pendingJobIds } from "./recover.js";
 import { locateProvider } from "./locate.js";
@@ -91,6 +92,17 @@ async function handleSubmission(jobId: bigint, endpoints: Endpoints): Promise<vo
   // review() re-derives the keccak256 and rejects a mismatch before spending a
   // token, so tampered or stale content never reaches the model.
   const verdict = await review(brief, svg, job.deliverableHash);
+
+  // Recorded before it is submitted, so a crash between deciding and signing
+  // leaves a note of what was about to happen rather than a settled job nobody
+  // can account for. A storage failure must not stop the settlement: the verdict
+  // is already made, and refusing to submit it would strand the escrow until the
+  // timeout over a database that was merely unavailable.
+  try {
+    await rememberReview(jobId, verdict);
+  } catch (err) {
+    console.error(`[agent-c] job ${jobId}: could not record the reasoning —`, err);
+  }
 
   console.log(
     `[agent-c] job ${jobId} verdict: ${verdict.approve ? "APPROVE" : "REJECT"} — ${verdict.reason}`,

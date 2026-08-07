@@ -1,16 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  ArrowRight,
-  Download,
-  ExternalLink,
-  Fingerprint,
-  Hash,
-  Layers3,
-  Lock,
-  X,
-} from 'lucide-react'
+import { ArrowRight, Fingerprint, Hash, Layers3, Lock, X } from 'lucide-react'
 import {
   JOB_STEPS,
   type JobStep,
@@ -189,48 +180,26 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
               )}
             </div>
 
-            {/* The work itself, not just its fingerprint. The hash proves the
-                bytes were not swapped; it does not let anyone read them, and a
-                settled job whose output nobody can see is a receipt without a
-                purchase. The route re-derives the hash before serving. */}
-            {live.deliverableUrl && (
-              <div className="rounded-lg border border-border bg-secondary/40">
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Delivered work
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <a
-                      href={`/api/deliverable/${job.id}?download=1`}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                    >
-                      <Download className="size-3" aria-hidden="true" /> Download
-                    </a>
-                    <a
-                      href={`/api/deliverable/${job.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                    >
-                      Open <ExternalLink className="size-3" aria-hidden="true" />
-                    </a>
-                  </div>
-                </div>
-                {/* Sandboxed: untrusted output from another agent, served under
-                    a locked-down CSP by the route. */}
-                <iframe
-                  src={`/api/deliverable/${job.id}`}
-                  title={`Deliverable for job ${job.id}`}
-                  sandbox=""
-                  // The page declares color-scheme: dark, and an iframe
-                  // inherits it — so a plain-text deliverable was rendered with
-                  // dark-mode defaults, white on the white background set here,
-                  // and could only be read by selecting it. The document inside
-                  // is the provider's own bytes and is not ours to restyle, so
-                  // the frame declares light instead.
-                  style={{ colorScheme: "light" }}
-                  className="h-64 w-full rounded-b-lg border-t border-border bg-white"
-                />
+            {/* Deliberately not the work itself.
+                This page is every job on the network, so whoever is reading it is
+                usually a party to none of them, and the delivered file is what
+                somebody else commissioned and paid for. What belongs here is the
+                proof it exists and has not changed: the hash the provider
+                committed on chain. The client who ordered the work sees the work,
+                on their Assistant and Dashboard. */}
+            {job.deliverableHash && (
+              <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Delivered work — fingerprint only
+                </p>
+                <code className="mt-1 block truncate font-mono text-sm">
+                  {truncateHex(job.deliverableHash, 14, 12)}
+                </code>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  The file belongs to the client who paid for it. This is the
+                  keccak256 the provider committed on chain — what the evaluator
+                  graded, and what proves the work was not swapped afterwards.
+                </p>
               </div>
             )}
 

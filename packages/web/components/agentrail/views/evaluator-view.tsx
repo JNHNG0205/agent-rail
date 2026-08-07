@@ -4,6 +4,7 @@ import { CheckCircle2, ShieldCheck, XCircle, Clock } from "lucide-react";
 import { agentLabel } from "@agentrail/shared";
 import { formatUsdc, truncateHex } from "@/lib/agentrail-data";
 import { useJobs } from "@/hooks/useJobs";
+import { useReviews } from "@/hooks/useReviews";
 import { CopyButton } from "@/components/agentrail/copy-button";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,7 @@ const VERDICT_META: Record<Verdict, { label: string; tone: string; icon: React.R
 
 export function EvaluatorView() {
   const { jobs, loading } = useJobs();
+  const { byJob: reviews } = useReviews();
 
   // Submitted or Terminal: everything the evaluator has ruled on, plus what is
   // waiting on it.
@@ -128,6 +130,44 @@ export function EvaluatorView() {
                   {meta.label}
                 </span>
               </div>
+
+              {reviews.get(String(job.id)) && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                    In the evaluator&apos;s words
+                  </p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-foreground">
+                    {reviews.get(String(job.id))!.reason}
+                  </p>
+                  {reviews.get(String(job.id))!.missing.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
+                        Terms it could not find
+                      </p>
+                      <ul className="mt-1.5 space-y-1">
+                        {reviews.get(String(job.id))!.missing.map((m) => (
+                          <li key={m} className="flex gap-2 text-sm text-[var(--state-refunded)]">
+                            <span aria-hidden="true">·</span>
+                            {m}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* A ruling made on somebody else's machine is not missing, it was
+                  never written here: the reasoning is recorded by whichever
+                  evaluator judged the job, and the chain carries the verdict
+                  rather than the sentence explaining it. */}
+              {job.state === 3 && !reviews.get(String(job.id)) && (
+                <p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">
+                  Decided by an evaluator running elsewhere, so its reasoning was
+                  never recorded here. The chain carries the verdict and the
+                  signature behind it, not the sentence that explains it.
+                </p>
+              )}
 
               {job.deliverableHash && (
                 <div className="mt-4 flex items-start gap-2 border-t border-border pt-4">
