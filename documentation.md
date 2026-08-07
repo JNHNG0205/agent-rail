@@ -161,7 +161,7 @@ Create a key at <https://openrouter.ai>, then in `packages/agents/.env`:
 ```bash
 LLM_PROVIDER=openrouter
 LLM_API_KEY=sk-or-...
-LLM_MODEL=google/gemini-2.0-flash-001
+LLM_MODEL=deepseek/deepseek-v4-flash
 ```
 
 Any model supporting **structured outputs** works. To skip this for now, leave
@@ -280,7 +280,7 @@ ignored**, which looks identical to it having no effect.
 | File | Read by | Holds |
 |---|---|---|
 | `.env` | Hardhat, `preflight.ts` | RPC endpoint, deployer and agent keys |
-| `packages/agents/.env` | runtime, evaluator | RPC, evaluator key, treasury key, LLM, database |
+| `packages/agents/.env` | runtime, evaluator | chain, RPC, evaluator key **and address**, treasury key, LLM, database |
 | `packages/indexer/.env.local` | Ponder (**not** `.env`) | chain id, database, its own RPC |
 | `packages/web/.env` | Next.js | database, Privy, public endpoints |
 
@@ -311,7 +311,15 @@ day, which a free key sustains comfortably.
 
 The evaluator's verdict is parsed, signed and settled on chain, so a malformed
 reply would strand an escrow — hence the requirement for **structured outputs**.
-`google/gemini-2.0-flash-001` works well and is inexpensive.
+`deepseek/deepseek-v4-flash` and `google/gemini-2.5-flash-lite` are both cheap
+and verified against every call this system makes.
+
+Models differ in more than price. One tested here returned an empty body on
+roughly a quarter of calls — a valid HTTP 200 carrying no content — so each
+request is attempted four times with backoff. OpenRouter spreads a model across
+several upstream providers, and a retry lands on a different one. Expect the
+proposed price for a service to vary between models too; it is clamped to 1–100
+USDC and can be edited before the agent is created.
 
 `LLM_PROVIDER=mock` runs with no key and no model calls. Agents still transact
 and every deliverable is a fixed stand-in, which is useful for checking the chain
@@ -346,7 +354,7 @@ Open <http://localhost:3000>.
 
 The contracts are already deployed and their addresses are already in
 `packages/shared/src/deployments.ts`, so nothing needs deploying. To deploy your
-own instead, see 5.4.
+own instead, see 4.4.
 
 **Expect the indexer to lag on first start.** It backfills roughly 120,000
 blocks, which takes a few minutes. Escrow Jobs and the event feed fill in behind
@@ -355,9 +363,12 @@ chain directly. You can commission work immediately.
 
 ### 4.2 Or start the services separately
 
-`dev.sh` stops everything when any one service exits, so a single crash ends the
-session. When something is failing, or during a demonstration where an indexer
-hiccup should not take the application down, run them in four terminals:
+`dev.sh` runs the web application in the foreground and the rest in the
+background, checking each only as it starts. So a service that dies **later**
+dies quietly: the site stays up, and the symptom appears somewhere else entirely
+— an evaluator that stopped looks like jobs that reach `Submitted` and never
+settle. Running them in four terminals puts each one's output where you can see
+it:
 
 ```bash
 npm run indexer:base-sepolia    # Ponder event indexer
@@ -366,12 +377,12 @@ npm run agent:c:base-sepolia    # the evaluator
 npm run web                     # Next.js at :3000
 ```
 
-**Use the `:base-sepolia` variants.** Every service takes its chain from
-`CHAIN_ID`, and those variants set it. The plain names use whatever is in that
-package's own env file, which for the indexer is `31337` — so `npm run indexer`
-on its own looks for a local chain and fails with `ECONNREFUSED 127.0.0.1:8545`.
-`dev.sh` exports `CHAIN_ID` for its children, which is why the same command
-works there and not on its own.
+**Prefer the `:base-sepolia` variants.** Every service takes its chain from
+`CHAIN_ID`: those variants set it on the command line, which wins over the env
+file. The plain names fall back to whatever that package's own file says, and
+the templates now set `84532` there — so both work. The variants are still worth
+using, because they say on the command line which chain you meant rather than
+leaving it to a file you edited some time ago.
 
 `npm run web` needs no variant: it reads `NEXT_PUBLIC_CHAIN_ID` from
 `packages/web/.env`.
@@ -412,10 +423,12 @@ schema as above — it refuses to reuse one written against different contracts.
 1. Open <http://localhost:3000> and **sign in** with an email or a wallet.
 2. **Agents & Registry → Create provider agent.** Do this first: a new
    installation has no hosted agents, so there is nobody to hire until you make
-   one (section 3.3). Describe in plain language what it sells. The system proposes a price, a delivery format and the terms
-   it will be graded against. Read them before confirming: registration is
-   soulbound and cannot be undone, and terms that cannot be checked by reading
-   the delivered work make the escrow settle at random.
+   one (section 3.3). Describe in plain language what it sells. The system
+   proposes a price, a delivery format and the terms it will be graded against.
+   **Edit them before confirming** — every field there is editable, and this is
+   the last chance: registration is soulbound and cannot be undone, the terms
+   apply to every job this agent ever takes, and terms that cannot be checked by
+   reading the delivered work make the escrow settle at random.
 3. **Assistant.** Ask for something the marketplace covers. Your agent asks for
    anything genuinely missing, chooses a provider whose service fits, and shows
    you the brief and the terms before committing anything.
@@ -439,11 +452,25 @@ and on block confirmations.
 ### 6.1 A marketplace, not a fixed pipeline
 
 Nothing about the work is hardcoded. Users create providers; each publishes what
-it sells, its price, the form it delivers in (`svg`, `markdown` or `text`) and
-the requirements it will be graded against. A client agent reads that directory
-and chooses a counterparty whose service actually covers the request — declining
-plainly when nobody sells what is being asked for, rather than commissioning
-work that cannot be delivered.
+it sells, its price, the form it delivers in (`svg`, `markdown`, `html` or
+`text`) and the requirements it will be graded against. A client agent reads that
+directory and chooses a counterparty whose service actually covers the request —
+declining plainly when nobody sells what is being asked for, rather than
+commissioning work that cannot be delivered.
+
+It also declines when it cannot tell **which** provider fits, rather than falling
+back to the first one. Funding happens before the provider starts, so hiring an
+agent that does not do the work buys a refund at best and the timeout at worst,
+while the person is told their job is under way.
+
+**The terms are proposed, not decided.** A provider's requirements are written
+from its plain-language purpose and then shown for editing, because they are
+published once and applied unchanged to every job that agent ever takes. A term
+naming one buyer's choice — "uses the colour red", when the buyer picks the
+colours — refunds the next buyer who wants something else. So the wording asks
+for what the buyer requested rather than a fixed value, and never for something
+the delivered form is not allowed to contain: a page carrying an event handler is
+refused as unsafe, so a term demanding a working button could never be met.
 
 The only fixed role is the evaluator.
 
@@ -528,7 +555,10 @@ results), **Dashboard** (your agents, your escrow), **Agents & Registry** (the
 public marketplace), **Escrow Jobs** (every job and its state machine), and
 **Evaluator Suite** (verdicts and what they were graded against).
 
-Results can be previewed, downloaded with a sensible filename, or copied.
+Results can be previewed, downloaded with a sensible filename, or copied. Each
+kind is served with its own content type and previewed accordingly, so a page
+renders as a page rather than as its own source — inside a sandboxed frame under
+a `default-src 'none'` policy, because it is another agent's output.
 Several commissions can be watched at once, because agents genuinely work
 concurrently.
 
@@ -598,7 +628,7 @@ cannot be bought.
 `JobContract`, so reputation can only be earned by a settled job, never written
 directly.
 
-**`MockUSDC`** — see 8.2.
+**`MockUSDC`** — see 7.2.
 
 ### 7.2 Why MockUSDC
 
@@ -660,10 +690,21 @@ submits the hash), `claim` (`claimTimeout` for deliveries nobody judged), and
 
 Does the work a provider was hired for. It is told what it sells by its own
 published summary, which is what makes one agent a designer and another a
-copywriter. Output is validated by declared kind — `svg` is additionally checked
-for scripts, event handlers, `foreignObject` and remote references, and refused
-rather than sanitised, because the bytes that are hashed, judged and displayed
-must be identical.
+copywriter. Output is validated by declared kind, and refused rather than
+sanitised, because the bytes that are hashed, judged and displayed must be
+identical.
+
+`svg` and `html` are additionally checked for anything that would execute or
+fetch. The two checks differ deliberately. An SVG is refused for any remote
+reference at all, including a link, because a drawing has no reason to point
+anywhere. A page is refused only for subresources the browser fetches by itself —
+scripts, remote images, remote stylesheets — while a plain `<a href>` is allowed,
+since refusing links would make most honest pages unacceptable and a link only
+goes anywhere when a person follows it.
+
+Both are checked even though the preview frame is sandboxed and served under a
+`default-src 'none'` policy, because the same bytes can be downloaded and opened
+from disk, where neither applies.
 
 ### 7.5 The evaluator (`packages/agents/src/agent-c`)
 
@@ -755,7 +796,10 @@ is safe. Do **not** use `npm run db:reset` for this: it destroys both schemas,
 and the agent keys are the only copies.
 
 **A service reports `ECONNREFUSED 127.0.0.1:8545`.** It is on the wrong chain,
-looking for a local node. Use the `:base-sepolia` variant — see 5.2.
+looking for a local node that is not running. Either its env file still names
+chain `31337` — the templates set `84532`, but a file copied before that does not
+— or it was started without the `:base-sepolia` variant while its file says
+nothing. Check `CHAIN_ID` in that package's own env file (section 3.4).
 
 **"No wallet is linked to your account" when withdrawing.** Identity tokens are
 not enabled in the Privy dashboard (setup step 8), or the session predates
@@ -764,6 +808,12 @@ enabling them. Sign out and back in: the token is issued at login.
 **The page loads unstyled and empty.** A production build was run while the
 development server was running; both write to `.next`. Stop the server, delete
 `packages/web/.next`, and restart.
+
+**Creating a provider is refused with a message about a term.** The proposed
+terms are editable and validated: each must be non-blank, under 200 characters,
+and there may be at most six. The message names the term and the problem — a
+model occasionally writes one long enough to be refused. Shorten it in the dialog
+and confirm again.
 
 **An agent was created but never appears in the directory.** Its onboarding did
 not finish — usually the treasury ran out of ETH, or the RPC endpoint refused
