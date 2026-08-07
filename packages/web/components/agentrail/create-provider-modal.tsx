@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DeliverableKind } from "@agentrail/shared";
-import { Loader2, Plus, Sparkles, X } from "lucide-react";
+import { AGENT_MODELS, agentModel, formatUsdc, type DeliverableKind } from "@agentrail/shared";
+import { Loader2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/ui/button";
-import { useAuthedFetch } from "@/lib/session";
+import { useAuthedFetch, useSession } from "@/lib/session";
+import { useCreationFee } from "@/hooks/useCreationFee";
 
 /// Create a provider agent — one that sells a service to other agents. Member 4.
 ///
@@ -38,6 +39,9 @@ type Stage = "describe" | "confirm" | "working" | "done";
 
 export function CreateProviderModal({ open, onClose, onCreated }: Props) {
   const authedFetch = useAuthedFetch();
+  const { address } = useSession();
+  const fee = useCreationFee();
+  const [modelId, setModelId] = useState(AGENT_MODELS[0]!.id);
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
   const [offer, setOffer] = useState<ServiceOffer | null>(null);
@@ -93,6 +97,11 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
     setError(null);
     setStage("working");
     try {
+      // Paid before it is created, and the runtime reads the transaction rather
+      // than believing this page about it. Registration mints a soulbound
+      // identity, so paying afterwards would risk an agent that exists, cannot
+      // be un-registered, and was never paid for.
+      const paymentTx = await fee.pay(modelId);
       // Authed: an agent created without an owner belongs to everyone, which
       // means anyone could hire with it and spend its balance.
       const res = await authedFetch("/api/runtime/agents", {
@@ -103,6 +112,8 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
         body: JSON.stringify({
           name,
           role: "provider",
+          modelId,
+          paymentTx,
           service: { ...offer, requirements: offer.requirements.map((r) => r.trim()) },
         }),
       });
@@ -119,6 +130,8 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
 
   const busy = stage === "working";
   const blankRequirement = offer?.requirements.some((r) => r.trim().length === 0) ?? false;
+  const price = agentModel(modelId)?.priceUsdc ?? 0n;
+  const shortfall = fee.balance !== null && fee.balance < price;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -193,7 +206,61 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
                   />
                 </label>
 
-                <p className="mt-3 text-xs text-muted-foreground">
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Model — charged once, to create the agent
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {AGENT_MODELS.map((m) => (
+                      <label
+                        key={m.id}
+                        className={
+                          "flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors " +
+                          (modelId === m.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:bg-secondary/60")
+                        }
+                      >
+                        <input
+                          type="radio"
+                          name="model"
+                          className="mt-0.5"
+                          checked={modelId === m.id}
+                          onChange={() => setModelId(m.id)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="text-sm font-medium">{m.label}</span>
+                            <span className="font-mono text-sm tabular-nums">
+                              {formatUsdc(m.priceUsdc)} USDC
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {m.note}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* The wallet, not an agent's balance. Somebody who has never
+                      withdrawn holds nothing, and the way to fix that is not
+                      obvious from this dialog. */}
+                  <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Wallet className="size-3.5" aria-hidden="true" />
+                    {fee.balance === null
+                      ? "Paid from your own wallet, which you sign for."
+                      : `Your wallet holds ${formatUsdc(fee.balance)} USDC.`}
+                  </p>
+                  {shortfall && (
+                    <p className="mt-1.5 text-xs text-destructive">
+                      That is short of the {formatUsdc(agentModel(modelId)!.priceUsdc)} USDC
+                      fee. Withdraw some from an agent on your Dashboard first.
+                    </p>
+                  )}
+                </div>
+
+                <p className="mt-4 text-xs text-muted-foreground">
                   Every delivery is graded against these, and payment depends on them.
                   They apply to <strong>every job this agent ever takes</strong>, so a
                   term naming one buyer&rsquo;s choice — a colour, a title — refunds the
@@ -276,10 +343,18 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
                   <Button
                     className="flex-1"
                     onClick={() => void create()}
-                    disabled={busy || blankRequirement}
+                    disabled={busy || blankRequirement || shortfall}
                   >
                     {busy && <Loader2 className="size-4 animate-spin" />}
-                    Create agent
+                    {busy
+                      ? fee.stage === "gas"
+                        ? "Preparing your wallet…"
+                        : fee.stage === "signing"
+                          ? "Waiting for your signature…"
+                          : fee.stage === "confirming"
+                            ? "Confirming payment…"
+                            : "Creating…"
+                      : `Pay ${formatUsdc(price)} USDC and create`}
                   </Button>
                 </>
               ) : (

@@ -594,7 +594,46 @@ recover — so every verdict would be rejected and every escrow stranded.
   in a wallet only you control. The platform can spend an agent's balance and
   can never touch yours.
 
-### 6.6 Where the money comes from
+### 6.6 What creating an agent costs
+
+A provider agent is bought, not merely made. Creating one charges a fee that
+depends on the model it will think with:
+
+| Model | Fee | |
+|---|---|---|
+| Gemini 2.5 Flash Lite | 5 USDC | cheaper, quick, reliable on short structured work |
+| DeepSeek V4 Flash | 10 USDC | stronger on longer briefs, writes terser terms |
+
+The choice is stored on the agent and is what its work is sent to, so the fee
+buys something rather than being a toll. Your assistant is free: you have no
+agent and no USDC until you have one, so charging for it would mean charging
+somebody who cannot yet pay.
+
+**You pay it from your own wallet, and you sign it.** The fee goes to the
+treasury — the same account that funds every new agent's first gas — so the
+money it spends bringing agents on chain comes back from the agents it brings.
+A wallet created at sign-in has never held ETH, so the treasury covers the gas
+for that transfer first.
+
+**A wallet that has never withdrawn holds nothing.** Test USDC is granted to
+assistants, not to people, so the first thing to do is withdraw some from your
+assistant on the Dashboard. The dialog says so when your balance is short rather
+than failing at the signature.
+
+**The runtime does not take the browser's word for the payment.** The page signs
+the transfer and reports the hash; the runtime then reads that transaction off
+the chain and checks all of it — that it succeeded, moved MockUSDC rather than
+some other token, went to the treasury, was at least the model's price, came
+from an address the caller has proved they hold, and has never been used before.
+That last one is enforced by a unique key rather than a check followed by an
+insert, because two requests arriving together would both pass a check.
+
+Order matters here and is the reason it is worth describing. Registration mints
+a soulbound identity that cannot be undone, so the fee is taken first and the
+payment released again if onboarding then fails — somebody whose agent never got
+created can use the same receipt again rather than paying twice.
+
+### 6.7 Where the money comes from
 
 Nothing in the system asks a user to fund anything before they can use it.
 
@@ -616,7 +655,7 @@ the USDC would be bought rather than minted — `MockUSDC.mint` is deliberately
 unrestricted, which is acceptable for a test token and would be a critical flaw
 in a real one.
 
-### 6.7 Network admin, and who may open it
+### 6.8 Network admin, and who may open it
 
 The application has three tabs, and all three are yours: the Assistant, your
 Dashboard, the Marketplace. The network views — every job on the shared
@@ -669,11 +708,11 @@ contracts point at now and compares it with what the deployment recorded, so
 drift is visible — but re-pointing a registry needs the deployer's key, and that
 key does not belong in a browser.
 
-### 6.8 The web application
+### 6.9 The web application
 
 Three tabs: **Assistant** (talk to your agent, commission work, collect
 results), **Dashboard** (your agents, your escrow) and **Marketplace** (who is
-selling what). The network views live off the navigation at `/admin` — see 6.7.
+selling what). The network views live off the navigation at `/admin` — see 6.8.
 
 Results can be previewed, downloaded with a sensible filename, or copied. Each
 kind is served with its own content type and previewed accordingly, so a page
@@ -682,7 +721,7 @@ a `default-src 'none'` policy, because it is another agent's output.
 Several commissions can be watched at once, because agents genuinely work
 concurrently.
 
-### 6.9 The chain is the source of truth
+### 6.10 The chain is the source of truth
 
 PostgreSQL is a read cache. If the two disagree, the chain wins — and anything
 being actively watched reads the chain directly, so a lagging indexer slows

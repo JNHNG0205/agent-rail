@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { proxy } from "@/lib/runtime";
-import { ownerOf } from "@/lib/owner";
+import { ownerOf, verifiedWalletsOf } from "@/lib/owner";
 
 /// The agent runtime's directory — who exists and what they sell. Member 4.
 ///
@@ -36,6 +36,23 @@ export async function POST(request: Request) {
     // nothing is known about who they are, so signing in again is the fix.
     return NextResponse.json({ error: "sign in again" }, { status: 401 });
   }
-  const result = await proxy("/agents", { method: "POST", body, owner });
+  // The runtime checks the creation fee against the addresses this caller is
+  // known to hold, and it cannot establish those itself — identity is resolved
+  // here, once, and passed on. Without this a payment made by anybody could be
+  // presented by anybody else.
+  let payerAddresses: string[] = [];
+  try {
+    payerAddresses = (await verifiedWalletsOf(request)).map((w) => w.address);
+  } catch {
+    // A session with no identity token has no wallets to name. The runtime
+    // refuses the creation rather than this route inventing an answer.
+    payerAddresses = [];
+  }
+
+  const result = await proxy("/agents", {
+    method: "POST",
+    body: { ...(body as Record<string, unknown>), payerAddresses },
+    owner,
+  });
   return NextResponse.json(result.body, { status: result.status });
 }

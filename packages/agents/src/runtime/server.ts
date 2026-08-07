@@ -1,7 +1,9 @@
 import { createServer, type Server, type IncomingMessage } from "node:http";
 import {
+  isAgentModelId,
   isDeliverableKind,
   isServiceCategory,
+  modelPrice,
   parseUsdc,
   type JobBrief,
 } from "@agentrail/shared";
@@ -23,6 +25,7 @@ import { hire, findProviders } from "./hire.js";
 import { chat, isChatHistory } from "./chat.js";
 import { isAuthorised, assertSafeToListen, host, secret } from "./auth.js";
 import { proposeOffer } from "./offer.js";
+import { claimPayment, releasePayment, treasuryAddress, verifyPayment } from "./payment.js";
 import { mayActAs } from "./store.js";
 
 /// Who the caller says they are.
@@ -245,10 +248,32 @@ export function startRuntime(): Promise<Server> {
         return;
       }
 
+      // GET /treasury — where a creation fee is paid to.
+      //
+      // Served rather than configured in the web app, so one place derives it
+      // from the key that will actually receive it. A second copy in another env
+      // file is a way to send money to an address nobody holds.
+      if (method === "GET" && parts.length === 1 && parts[0] === "treasury") {
+        const address = treasuryAddress();
+        if (!address) {
+          json(503, { error: "no treasury is configured" });
+          return;
+        }
+        json(200, { address });
+        return;
+      }
+
       // POST /agents — create one, then bring it on chain.
       if (method === "POST" && parts.length === 1 && parts[0] === "agents") {
         const body: unknown = JSON.parse(await readBody(req));
-        const b = body as { name?: unknown; role?: unknown; service?: unknown };
+        const b = body as {
+          name?: unknown;
+          role?: unknown;
+          service?: unknown;
+          modelId?: unknown;
+          paymentTx?: unknown;
+          payerAddresses?: unknown;
+        };
 
         if (typeof b.name !== "string" || b.name.trim().length === 0 || b.name.length > 60) {
           json(400, { error: "name must be a non-empty string of at most 60 characters" });
@@ -266,20 +291,89 @@ export function startRuntime(): Promise<Server> {
           return;
         }
 
+        // A provider is paid for; an assistant is not. The person has no USDC
+        // and no agent until they have one, so charging for it would mean
+        // charging somebody who cannot pay before they can do anything at all.
+        let payment: { txHash: `0x${string}`; payer: string; amount: bigint } | null = null;
+        if (b.role === "provider") {
+          if (!isAgentModelId(b.modelId)) {
+            json(400, { error: "choose a model to create this agent with" });
+            return;
+          }
+          if (typeof b.paymentTx !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(b.paymentTx)) {
+            json(400, { error: "a payment transaction hash is required" });
+            return;
+          }
+          // The wallets the web layer verified for this caller. The runtime takes
+          // them on trust for the same reason it takes the owner on trust: proving
+          // identity is the web layer's job, and doing it twice means two
+          // implementations of one rule. What it will not do is accept a payment
+          // from an address nobody claimed.
+          const payers = Array.isArray(b.payerAddresses)
+            ? b.payerAddresses.filter((a): a is string => typeof a === "string")
+            : [];
+          if (payers.length === 0) {
+            json(400, { error: "no verified wallet to have paid from" });
+            return;
+          }
+
+          const price = modelPrice(b.modelId);
+          const verified = await verifyPayment({
+            txHash: b.paymentTx as `0x${string}`,
+            payerCandidates: payers,
+            expectedAmount: price ?? 0n,
+          });
+          if (!verified.ok) {
+            json(402, { error: verified.error });
+            return;
+          }
+          payment = {
+            txHash: b.paymentTx as `0x${string}`,
+            payer: verified.payer,
+            amount: verified.amount,
+          };
+        }
+
         const record = await createAgent({
           name: b.name.trim(),
           role: b.role,
           service: b.role === "provider" ? (b.service as ServiceOffer) : null,
           createdBy: callerOwner(req),
+          modelId: typeof b.modelId === "string" ? b.modelId : null,
         });
+
+        // Consumed after the record exists so the hash is spent against a real
+        // agent id, and before anything on chain so a duplicate request cannot
+        // race past this and register a second identity on one receipt.
+        if (payment) {
+          const claimed = await claimPayment({
+            txHash: payment.txHash,
+            payer: payment.payer,
+            amount: payment.amount,
+            modelId: b.modelId as string,
+            agentId: record.id,
+          });
+          if (!claimed) {
+            json(409, { error: "that payment has already been used to create an agent" });
+            return;
+          }
+        }
 
         // Fund, register, and grant a client its spending money. Done here so
         // the agent is usable the moment this call returns.
         const account = await accountOf(record);
-        await onboard(account, {
-          treasuryKey: treasuryKey(),
-          grantUsdc: record.role === "client",
-        });
+        try {
+          await onboard(account, {
+            treasuryKey: treasuryKey(),
+            grantUsdc: record.role === "client",
+          });
+        } catch (err) {
+          // The identity was paid for and never minted. Release the hash so the
+          // same receipt can be used again rather than making somebody pay twice
+          // for an agent that does not exist.
+          if (payment) await releasePayment(payment.txHash);
+          throw err;
+        }
         await markOnboarded(record.id);
 
         console.log(`[runtime] created ${record.role} "${record.name}" (${record.id})`);

@@ -57,6 +57,10 @@ export interface AgentRecord {
   /// When onboarding completed. Null means it did not: the agent holds no
   /// identity and no gas, so it cannot take a job.
   onboardedAt: string | null;
+  /// The model this agent was paid for, and works with. Null for agents created
+  /// before the choice existed; those fall back to the configured default rather
+  /// than becoming unusable.
+  modelId: string | null;
 }
 
 interface Row {
@@ -70,6 +74,7 @@ interface Row {
   created_by: string | null;
   created_at: Date;
   onboarded_at: Date | null;
+  model_id: string | null;
 }
 
 function toRecord(row: Row): AgentRecord {
@@ -84,10 +89,11 @@ function toRecord(row: Row): AgentRecord {
     createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
     onboardedAt: row.onboarded_at ? row.onboarded_at.toISOString() : null,
+    modelId: row.model_id,
   };
 }
 
-const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at
+const SELECT = `SELECT id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at, model_id
                   FROM $SCHEMA.agent`;
 
 export async function listAgents(): Promise<AgentRecord[]> {
@@ -122,6 +128,8 @@ export interface CreateAgentInput {
   service?: ServiceOffer | null;
   /// Who is creating it. Omitted means unowned, which anyone may use.
   createdBy?: string | null;
+  /// Which model was paid for. Omitted falls back to the configured default.
+  modelId?: string | null;
 }
 
 /// May this caller act as this agent — hire with it, or talk to it?
@@ -156,9 +164,9 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
   // The key is written before anything else happens to the agent, so a crash
   // during onboarding cannot lose it.
   const rows = await query<Row>(
-    `INSERT INTO $SCHEMA.agent (id, chain_id, name, role, service, private_key, address, created_by)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at`,
+    `INSERT INTO $SCHEMA.agent (id, chain_id, name, role, service, private_key, address, created_by, model_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, name, role, service, private_key, address, chain_id, created_by, created_at, onboarded_at, model_id`,
     [
       id,
       CHAIN_ID,
@@ -168,6 +176,7 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentRecord>
       privateKey,
       account.address,
       input.createdBy ?? null,
+      input.modelId ?? null,
     ],
   );
   return toRecord(rows[0]!);

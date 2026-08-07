@@ -26,8 +26,8 @@ import { publicClient, agentC } from "../lib/wallet.js";
 /// claim — not to a cleanup script, which cannot tell whether the deliverable
 /// was any good.
 ///
-///   npm run sweep:base-sepolia          list what would be cancelled
-///   npm run sweep:base-sepolia -- --yes actually cancel
+/// Lists without changing anything unless told otherwise: a cleanup script that
+/// cancels on sight is one nobody can safely run to find out what it would do.
 
 const CANCELLABLE = new Set<number>([JobState.Open, JobState.Funded]);
 

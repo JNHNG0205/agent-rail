@@ -119,6 +119,31 @@ export function initDb(): Promise<void> {
         PRIMARY KEY (chain_id, job_id)
       )
     `);
+    // Which model an agent was created with, so its work is done by the brain
+    // that was paid for. Nullable: agents created before this predate the choice
+    // and fall back to the configured default rather than becoming unusable.
+    await getPool().query(
+      `ALTER TABLE ${SCHEMA}.agent ADD COLUMN IF NOT EXISTS model_id text`,
+    );
+
+    // Every fee, against the transaction that paid it.
+    //
+    // The primary key is the point. The browser signs the payment and then tells
+    // the runtime which transaction it was, so without a unique constraint one
+    // receipt would create unlimited agents — and a check-then-insert would let
+    // two simultaneous requests both pass the check. The database decides.
+    await getPool().query(`
+      CREATE TABLE IF NOT EXISTS ${SCHEMA}.agent_payment (
+        chain_id   integer     NOT NULL,
+        tx_hash    text        NOT NULL,
+        payer      text        NOT NULL,
+        amount     text        NOT NULL,
+        model_id   text        NOT NULL,
+        agent_id   text        NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (chain_id, tx_hash)
+      )
+    `);
     // An address may hold only one identity, so two agents cannot share one.
     await getPool().query(
       `CREATE UNIQUE INDEX IF NOT EXISTS agent_address_idx ON ${SCHEMA}.agent (chain_id, lower(address))`,

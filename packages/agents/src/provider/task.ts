@@ -130,6 +130,8 @@ function mockDeliverable(kind: DeliverableKind, brief: JobBrief): string {
 
 export interface TaskOptions {
   kind: DeliverableKind;
+  /// The OpenRouter model to work with, when this agent has one of its own.
+  model?: string;
   /// The provider's published summary — what it sells, in its own words. This is
   /// what makes one provider a designer and another a copywriter.
   service: string;
@@ -164,6 +166,7 @@ export async function runTask(opts: TaskOptions): Promise<string> {
       user: renderBrief(opts.brief),
       mock: mockDeliverable(opts.kind, opts.brief),
       maxTokens: 4000,
+      model: opts.model,
     },
     rules.accept,
     rules.expectation,

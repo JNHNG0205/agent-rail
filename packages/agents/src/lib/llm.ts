@@ -4,6 +4,13 @@ export interface CompletionRequest {
   /// Returned verbatim when LLM_PROVIDER=mock. Required so offline mode cannot rot.
   mock: string;
   maxTokens?: number;
+  /// The model to answer with, when the caller has one of its own.
+  ///
+  /// A provider agent is created against a model its owner paid for, so its work
+  /// has to go to that model rather than to whatever LLM_MODEL happens to say.
+  /// Omitted falls back to the configured default, which is right for everything
+  /// nobody bought: the assistant, and the evaluator.
+  model?: string;
 }
 
 export interface JsonCompletionRequest<T> {
@@ -11,6 +18,8 @@ export interface JsonCompletionRequest<T> {
   user: string;
   mock: T;
   maxTokens?: number;
+  /// The model to answer with. See CompletionRequest.
+  model?: string;
   /// JSON Schema describing the reply, sent to OpenRouter as a structured
   /// output. Without it the model is merely asked for JSON in the prompt and may
   /// return prose, a fenced block or a differently shaped object — which for
@@ -67,7 +76,7 @@ async function postChat(
   schema?: { name: string; schema: JsonSchema },
 ): Promise<string> {
   const apiKey = requireEnv("LLM_API_KEY");
-  const model = requireEnv("LLM_MODEL");
+  const model = req.model ?? requireEnv("LLM_MODEL");
   const baseUrl = process.env.LLM_BASE_URL ?? DEFAULT_BASE_URL;
 
   const body = JSON.stringify({
@@ -200,6 +209,7 @@ export async function completeJson<T>(
     user: req.user,
     mock: JSON.stringify(req.mock),
     maxTokens: req.maxTokens,
+    model: req.model,
   };
 
   const structured = req.schema

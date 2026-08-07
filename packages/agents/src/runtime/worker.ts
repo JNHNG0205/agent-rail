@@ -1,5 +1,5 @@
 import type { Abi } from "viem";
-import { addresses, JobContractAbi, formatUsdc } from "@agentrail/shared";
+import { addresses, agentModel, formatUsdc, JobContractAbi } from "@agentrail/shared";
 import { publicClient } from "../lib/wallet.js";
 import { watchEvents } from "../lib/watch.js";
 import { hashDeliverable } from "../lib/hash.js";
@@ -59,6 +59,9 @@ export function startProviderWorker(): () => void {
           const svg = await runTask({
             kind: agent.service?.deliverable ?? "svg",
             service: agent.service?.summary ?? "a delivered piece of work",
+            // The model this agent was created against. Agents older than the
+            // choice have none and fall back to the configured default.
+            model: agent.modelId ? agentModel(agent.modelId)?.provider : undefined,
             brief,
           });
           const deliverableHash = hashDeliverable(svg);

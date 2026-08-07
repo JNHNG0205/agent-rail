@@ -59,3 +59,10 @@ export { IdentityRegistryAbi } from "./src/abis/IdentityRegistry";
 export { ReputationRegistryAbi } from "./src/abis/ReputationRegistry";
 export { MockUSDCAbi } from "./src/abis/MockUSDC";
 export { AGENT_LABELS, agentLabel } from "./src/agents";
+export {
+  AGENT_MODELS,
+  agentModel,
+  isAgentModelId,
+  modelPrice,
+  type AgentModel,
+} from "./src/models";

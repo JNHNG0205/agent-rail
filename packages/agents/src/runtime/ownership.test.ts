@@ -21,6 +21,7 @@ function agent(createdBy: string | null): AgentRecord {
     createdBy,
     createdAt: new Date().toISOString(),
     onboardedAt: new Date().toISOString(),
+    modelId: null,
   };
 }
 
