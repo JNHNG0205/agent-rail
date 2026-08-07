@@ -618,10 +618,14 @@ in a real one.
 
 ### 6.7 Network admin, and who may open it
 
-Four tabs, and three of them are yours: the Assistant, your Dashboard, the
-Marketplace. The fourth gathers the two views that are not — every job on the
-shared contracts, every verdict the evaluator has reached, and how the contracts
-are wired — behind a sign-in.
+The application has three tabs, and all three are yours: the Assistant, your
+Dashboard, the Marketplace. The network views — every job on the shared
+contracts, every verdict the evaluator has reached, and how the contracts are
+wired — are not in that navigation at all. They live at **`/admin`**.
+
+Unlisted rather than shown-and-refused. A fifth tab put an administrator's door
+in front of every user who has no business with it and no way through it;
+somebody who needs the page knows the address.
 
 **One administrator account, in the database.** Create it with:
 
@@ -667,11 +671,9 @@ key does not belong in a browser.
 
 ### 6.8 The web application
 
-Four tabs: **Assistant** (talk to your agent, commission work, collect
-results), **Dashboard** (your agents, your escrow), **Marketplace** (who is
-selling what), and **Network admin** (every job, every verdict, and — for the
-contract owner — how the contracts are wired). The first three are yours; the
-fourth is the whole network, which is why it is behind a check.
+Three tabs: **Assistant** (talk to your agent, commission work, collect
+results), **Dashboard** (your agents, your escrow) and **Marketplace** (who is
+selling what). The network views live off the navigation at `/admin` — see 6.7.
 
 Results can be previewed, downloaded with a sensible filename, or copied. Each
 kind is served with its own content type and previewed accordingly, so a page

@@ -7,7 +7,6 @@ import { SendModal } from '@/components/agentrail/send-modal'
 import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
-import { AdminView } from './views/admin-view'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
@@ -41,9 +40,6 @@ export function AppShell() {
         </div>
         <div className={cn('rise rise-1', activeTab === 'registry' ? 'block' : 'hidden')}>
           <RegistryView />
-        </div>
-        <div className={cn('rise rise-1', activeTab === 'admin' ? 'block' : 'hidden')}>
-          <AdminView />
         </div>
       </main>
 

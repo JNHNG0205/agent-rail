@@ -5,7 +5,6 @@ import {
   Bot,
   LayoutDashboard,
   Users,
-  Gauge,
   Layers,
   Wallet,
   Plus,
@@ -21,7 +20,7 @@ import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
 import { useWalletStatus } from '@/hooks/useWalletStatus'
 import { cn } from '@/lib/utils'
 
-export type TabId = 'assistant' | 'dashboard' | 'registry' | 'admin'
+export type TabId = 'assistant' | 'dashboard' | 'registry'
 
 export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -38,11 +37,6 @@ export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     id: 'registry',
     label: 'Marketplace',
     icon: <Users className="size-4" aria-hidden="true" />,
-  },
-  {
-    id: 'admin',
-    label: 'Network admin',
-    icon: <Gauge className="size-4" aria-hidden="true" />,
   },
 ]
 
