@@ -201,7 +201,7 @@ export async function checkAdmin(request: Request): Promise<AdminCheck> {
       return {
         admin: false,
         email: null,
-        reason: "no administrator exists yet — create one with: npm run admin:create",
+        reason: "no administrator account has been set up",
       };
     }
     return { admin: false, email: null, reason: "sign in with the administrator account" };

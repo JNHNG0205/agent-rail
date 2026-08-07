@@ -4,19 +4,16 @@ import { pool } from "../lib/db";
 
 /// Create or update the administrator account.
 ///
-///   npm run admin:create -- admin@example.com 'a good password'
-///
 /// Re-running for an existing address sets a new password rather than failing,
 /// which is also how a reset works: there is no separate flow, and the old
 /// session stops working the moment the hash changes.
 ///
 /// Wrapped in a function rather than using top-level await — this package is not
-/// an ES module, so tsx compiles it to CommonJS where top-level await is an
+/// an ES module, so tsx compiles it to CommonJS, where top-level await is an
 /// error.
 ///
 /// The password is an argument rather than a prompt so this can be scripted,
-/// which does put it in shell history. Prefix the command with a space if your
-/// shell honours HISTCONTROL=ignorespace, or change it again afterwards.
+/// which does put it in shell history.
 
 async function main(): Promise<void> {
   const [email, password] = process.argv.slice(2);
