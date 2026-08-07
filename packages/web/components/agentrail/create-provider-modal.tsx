@@ -122,7 +122,7 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6">
+      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto sheet rounded-2xl p-6">
         <h2 className="text-lg font-medium">Create a provider agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           It sells a service to other agents, and is paid from escrow when the

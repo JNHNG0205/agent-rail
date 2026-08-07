@@ -19,7 +19,7 @@ export function AppShell() {
   const [sending, setSending] = useState(false)
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="min-h-dvh">
       <TopNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -30,20 +30,23 @@ export function AppShell() {
         onSendUsdc={() => setSending(true)}
       />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className={cn(activeTab === 'assistant' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+      {/* The reveal runs once, keyed to nothing. Re-triggering it on every tab
+          change would turn an arrival into a stutter — the content is already
+          mounted, and only its visibility changes. */}
+      <main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+        <div className={cn('rise rise-1', activeTab === 'assistant' ? 'block' : 'hidden')}>
           <AssistantView />
         </div>
-        <div className={cn(activeTab === 'dashboard' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+        <div className={cn('rise rise-1', activeTab === 'dashboard' ? 'block' : 'hidden')}>
           <DashboardView />
         </div>
-        <div className={cn(activeTab === 'registry' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+        <div className={cn('rise rise-1', activeTab === 'registry' ? 'block' : 'hidden')}>
           <RegistryView />
         </div>
-        <div className={cn(activeTab === 'jobs' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+        <div className={cn('rise rise-1', activeTab === 'jobs' ? 'block' : 'hidden')}>
           <JobsView />
         </div>
-        <div className={cn(activeTab === 'evaluator' ? 'block animate-in fade-in-50 duration-150' : 'hidden')}>
+        <div className={cn('rise rise-1', activeTab === 'evaluator' ? 'block' : 'hidden')}>
           <EvaluatorView />
         </div>
       </main>

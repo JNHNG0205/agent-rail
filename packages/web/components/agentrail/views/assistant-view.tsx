@@ -105,7 +105,7 @@ function JobCard({
 
 
   return (
-          <section className="rounded-2xl border border-border bg-card p-5">
+          <section className="sheet rounded-2xl p-5">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -244,7 +244,7 @@ export function AssistantView() {
     // conversation beside it sat in white space. A chat that scrolls the whole
     // document is also the wrong shape: the composer should stay put.
     <div className="grid gap-6 lg:h-[calc(100vh-10rem)] lg:grid-cols-[1fr_20rem]">
-      <section className="flex min-h-[32rem] flex-col rounded-2xl border border-border bg-card lg:min-h-0">
+      <section className="flex min-h-[32rem] flex-col sheet rounded-2xl lg:min-h-0">
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
             <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
@@ -267,7 +267,42 @@ export function AssistantView() {
         </header>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-          {messages.map((m, i) => (
+          {/* A full-height panel holding one greeting read as a page that had
+              failed to load. Before a conversation exists, the space says what
+              this agent can be asked for instead of standing empty — and the
+              examples are generic on purpose, because what is actually on offer
+              depends on who has published a service. */}
+          {messages.length <= 1 && !thinking && (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-secondary text-primary">
+                <Bot className="size-6" aria-hidden="true" />
+              </span>
+              <h3 className="mt-4 font-display text-lg font-semibold tracking-tight">
+                Describe what you need
+              </h3>
+              <p className="mt-1.5 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+                Your agent reads the directory, picks a counterparty whose service
+                covers it, and escrows the fee before any work starts. It will say so
+                plainly if nobody sells what you are asking for.
+              </p>
+              <ul className="mt-5 flex flex-wrap justify-center gap-2">
+                {[
+                  "a launch poster for a coffee shop",
+                  "a release note for version 2.1",
+                  "a landing page in warm colours",
+                ].map((example) => (
+                  <li
+                    key={example}
+                    className="rounded-full border border-border bg-secondary/50 px-3 py-1.5 text-xs text-muted-foreground"
+                  >
+                    {example}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {messages.length > 1 && messages.map((m, i) => (
             <div
               key={i}
               className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
@@ -359,7 +394,7 @@ export function AssistantView() {
           />
         ))}
 
-        <section className="rounded-2xl border border-border bg-card p-5">
+        <section className="sheet rounded-2xl p-5">
           <p className="mb-3 flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             <Store className="size-3.5" /> Available agents
           </p>

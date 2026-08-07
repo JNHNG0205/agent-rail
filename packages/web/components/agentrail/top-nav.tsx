@@ -97,27 +97,27 @@ export function TopNav({
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="masthead-in sticky top-0 z-30 border-b border-rail/15 bg-rail text-rail-foreground shadow-[0_1px_0_rgba(11,29,26,0.06),0_10px_30px_-24px_rgba(11,29,26,0.8)]">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Top row: logo + chain + wallet/create */}
         <div className="flex h-16 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(220,75,46,0.55)]">
                 <Layers className="size-5" aria-hidden="true" />
               </div>
-              <span className="text-lg font-semibold tracking-tight text-foreground">
+              <span className="font-display text-lg font-semibold tracking-tight text-rail-foreground">
                 AgentRail
               </span>
             </div>
 
-            <span className="hidden items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-medium text-success sm:inline-flex">
+            <span className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-rail-foreground/90 sm:inline-flex">
               <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-success" />
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--state-settled)] opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-[var(--state-settled)]" />
               </span>
               {CHAIN_NAME}
-              <span className="font-mono text-success/80">Chain {CHAIN_ID}</span>
+              <span className="font-mono text-rail-foreground/60">Chain {CHAIN_ID}</span>
             </span>
           </div>
 
@@ -127,20 +127,20 @@ export function TopNav({
                 <button
                   type="button"
                   onClick={() => setDropdownOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-rail"
                 >
-                  <Wallet className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span className="font-mono text-sm text-foreground">
+                  <Wallet className="size-4 shrink-0 text-rail-foreground/60" aria-hidden="true" />
+                  <span className="font-mono text-sm text-rail-foreground">
                     {connectedAddress ? truncateHex(connectedAddress, 6, 4) : 'Signed in'}
                   </span>
                   {connectedAddress && (
-                    <span className="hidden rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline">
+                    <span className="hidden rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-rail-foreground/70 sm:inline">
                       {walletStatus.isRegisteredAgent ? 'Registered agent' : 'Observer'}
                     </span>
                   )}
                   <ChevronDown
                     className={cn(
-                      'size-3.5 text-muted-foreground transition-transform',
+                      'size-3.5 text-rail-foreground/60 transition-transform',
                       dropdownOpen && 'rotate-180',
                     )}
                     aria-hidden="true"
@@ -149,7 +149,7 @@ export function TopNav({
 
                 {/* Wallet Dropdown Popover */}
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-xl z-50">
+                  <div className="sheet absolute right-0 z-50 mt-2 w-64 p-3 text-foreground shadow-[0_18px_40px_-16px_rgba(11,29,26,0.45)]">
                     <div className="border-b border-border/80 pb-2.5 mb-2.5">
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
                         {connectedAddress ? 'Connected Account' : 'Signed In'}
@@ -166,7 +166,7 @@ export function TopNav({
                           className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-secondary/50 text-muted-foreground transition-colors hover:text-foreground"
                         >
                           {copied ? (
-                            <Check className="size-3.5 text-success" />
+                            <Check className="size-3.5 text-[var(--state-settled)]" />
                           ) : (
                             <Copy className="size-3.5" />
                           )}
@@ -231,8 +231,8 @@ export function TopNav({
 
                       <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-2 py-1.5 text-xs text-muted-foreground">
                         <span>Network</span>
-                        <span className="inline-flex items-center gap-1.5 font-medium text-success">
-                          <span className="size-1.5 rounded-full bg-success" />
+                        <span className="inline-flex items-center gap-1.5 font-medium text-[var(--state-settled)]">
+                          <span className="size-1.5 rounded-full bg-[var(--state-settled)]" />
                           {CHAIN_NAME} ({CHAIN_ID})
                         </span>
                       </div>
@@ -256,7 +256,7 @@ export function TopNav({
               <button
                 type="button"
                 onClick={onConnectWallet}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-rail"
               >
                 <Wallet className="size-4" aria-hidden="true" />
                 Sign in
@@ -280,10 +280,10 @@ export function TopNav({
                 onClick={() => onTabChange(tab.id)}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-rail',
                   isActive
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'border-primary text-rail-foreground'
+                    : 'border-transparent text-rail-foreground/55 hover:text-rail-foreground/90',
                 )}
               >
                 {tab.icon}

@@ -23,30 +23,11 @@ import { useRegistry } from '@/hooks/useRegistry'
 import { JOB_STATE_LABELS, agentLabel } from '@agentrail/shared'
 import { ProgressTracker } from '@/components/agentrail/progress-tracker'
 import { CopyButton } from '@/components/agentrail/copy-button'
+import { StatePill } from '@/components/agentrail/state-pill'
+import { statusOf, STATUS_KEYS, statusByKey, type JobOutcome, type StatusKey } from '@/lib/status'
 import { cn } from '@/lib/utils'
 
-const STATUS_TONE: Record<JobStep, string> = {
-  Open: 'border-muted-foreground/30 bg-secondary/60 text-muted-foreground',
-  Funded: 'border-warning/30 bg-warning/10 text-warning',
-  Submitted: 'border-primary/30 bg-primary/10 text-primary',
-  Terminal: 'border-success/30 bg-success/10 text-success',
-}
-
-function StatusBadge({ status }: { status: JobStep }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-        STATUS_TONE[status],
-      )}
-    >
-      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-      {status}
-    </span>
-  )
-}
-
-const FILTERS: (JobStep | 'All')[] = ['All', ...JOB_STEPS]
+const FILTERS: (StatusKey | 'All')[] = ['All', ...STATUS_KEYS]
 
 /// What this view shows for one job. Every field is derived from the indexed row
 /// — the labels come from agentLabel(), the blocks from the chain. Nothing here
@@ -62,6 +43,10 @@ interface JobRow {
   amount: bigint
   escrowAmount: bigint
   status: JobStep
+  /// Kept alongside the label because `Terminal` alone cannot say whether the
+  /// money was paid, returned, or taken after nobody judged the work.
+  state: number
+  outcome: JobOutcome
   step: 1 | 2 | 3 | 4
   currentStep: JobStep
   deliverableHash: `0x${string}` | null
@@ -78,6 +63,11 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
   // thing someone opened to watch cannot.
   const live = useJobResult(job.id)
   const status = live.stage ?? job.status
+  // The pill needs both halves, and each has its own freshest source: the chain
+  // knows the stage first, and only the indexer's events can say which of the
+  // three endings a Terminal job reached.
+  const state = JOB_STEPS.indexOf(status)
+  const outcome = live.outcome ?? job.outcome
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -128,9 +118,9 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           <div className="flex items-center justify-between">
-            <StatusBadge status={status} />
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
-              <Lock className="size-3.5" aria-hidden="true" />
+            <StatePill state={state} outcome={outcome} />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1 font-mono text-xs font-medium text-foreground">
+              <Lock className="size-3.5 text-muted-foreground" aria-hidden="true" />
               {formatUsdc(job.amount)} USDC
             </span>
           </div>
@@ -267,7 +257,7 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
 }
 
 export function JobsView() {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All')
+  const [filter, setFilter] = useState<StatusKey | 'All'>('All')
   const [selected, setSelected] = useState<JobRow | null>(null)
   const { jobs: liveJobs } = useJobs()
   // agentLabel only knows the seeded three; every agent a user created is just
@@ -293,6 +283,8 @@ export function JobsView() {
           amount: j.amount,
           escrowAmount: j.amount,
           status: stateLabel,
+          state: j.state,
+          outcome: j.outcome,
           step: (j.state + 1) as 1 | 2 | 3 | 4,
           currentStep: stateLabel,
           deliverableHash: j.deliverableHash ?? null,
@@ -304,7 +296,10 @@ export function JobsView() {
     : []
 
   const filtered = useMemo(
-    () => (filter === 'All' ? allJobsList : allJobsList.filter((j) => j.status === filter)),
+    () =>
+      filter === 'All'
+        ? allJobsList
+        : allJobsList.filter((j) => statusOf(j.state, j.outcome).key === filter),
     [filter, allJobsList],
   )
 
@@ -324,7 +319,9 @@ export function JobsView() {
         {FILTERS.map((f) => {
           const isActive = f === filter
           const count =
-            f === 'All' ? allJobsList.length : allJobsList.filter((j) => j.status === f).length
+            f === 'All'
+              ? allJobsList.length
+              : allJobsList.filter((j) => statusOf(j.state, j.outcome).key === f).length
           return (
             <button
               key={f}
@@ -337,7 +334,7 @@ export function JobsView() {
                   : 'border-border bg-card text-muted-foreground hover:text-foreground',
               )}
             >
-              {f}
+              {f === 'All' ? 'All' : statusByKey(f).label}
               <span
                 className={cn(
                   'rounded-full px-1.5 text-[11px]',
@@ -354,7 +351,7 @@ export function JobsView() {
       </div>
 
       {/* Table (desktop) */}
-      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card md:block">
+      <div className="hidden overflow-hidden sheet rounded-2xl md:block">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -383,7 +380,7 @@ export function JobsView() {
                   {formatUsdc(job.amount)}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusBadge status={job.status} />
+                  <StatePill state={job.state} outcome={job.outcome} />
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   {job.createdAt}
@@ -411,11 +408,11 @@ export function JobsView() {
             key={job.id}
             type="button"
             onClick={() => setSelected(job)}
-            className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="sheet p-4 text-left transition-colors hover:bg-secondary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <div className="flex items-center justify-between gap-2">
               <code className="font-mono text-sm text-foreground">{job.id}</code>
-              <StatusBadge status={job.status} />
+              <StatePill state={job.state} outcome={job.outcome} />
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               {job.buyer} <ArrowRight className="inline size-3" aria-hidden="true" />{' '}

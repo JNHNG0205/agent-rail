@@ -97,7 +97,7 @@ export function SendModal({ open, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="send-title"
-        className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
+        className="w-full max-w-md sheet rounded-2xl p-5 shadow-2xl"
       >
         <div className="flex items-center gap-2.5">
           <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">

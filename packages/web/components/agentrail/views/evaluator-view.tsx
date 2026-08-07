@@ -79,7 +79,7 @@ export function EvaluatorView() {
           { label: "Rejected", value: rejected, tone: "text-destructive" },
           { label: "Awaiting decision", value: waiting, tone: "" },
         ].map((m) => (
-          <div key={m.label} className="rounded-2xl border border-border bg-card p-5">
+          <div key={m.label} className="sheet rounded-2xl p-5">
             <p className="text-[11px] tracking-wide text-muted-foreground uppercase">{m.label}</p>
             <p className={cn("mt-1 text-2xl font-semibold tabular-nums", m.tone)}>{m.value}</p>
           </div>
@@ -104,7 +104,7 @@ export function EvaluatorView() {
           const verdict = verdictOf(job.state, job.outcome ?? null);
           const meta = VERDICT_META[verdict];
           return (
-            <li key={String(job.id)} className="rounded-2xl border border-border bg-card p-5">
+            <li key={String(job.id)} className="sheet rounded-2xl p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">

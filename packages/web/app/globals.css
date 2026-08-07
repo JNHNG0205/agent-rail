@@ -2,81 +2,169 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-  /* Clean Obsidian: zinc-950 base, zinc-900 surfaces, white/10 outlines */
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
-  /* Indigo/Violet primary */
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
-  --muted: #18181b;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  /* Emerald terminal/completed */
-  --success: #10b981;
-  --success-foreground: #052e21;
-  /* Amber locked escrow */
-  --warning: #f59e0b;
-  --warning-foreground: #2a1a00;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #6366f1;
-  --chart-1: #6366f1;
-  --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #a1a1aa;
-  --chart-5: #71717a;
-  --radius: 0.75rem;
-  --sidebar: #18181b;
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #6366f1;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #27272a;
-  --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #6366f1;
-}
+/* AgentRail — a clearing house ledger. Member 4.
+ *
+ * The governing rule of this palette: hue means state. Everything structural is
+ * ink and paper, and the only saturated colour on a page belongs to money —
+ * whether it is open, escrowed, delivered, settled, refunded or timed out. That
+ * is not decoration, it is the one thing a person is here to read, and a
+ * dashboard that tints its cards for pleasure has nothing left to say it with.
+ *
+ * The neutral is chosen rather than inherited: porcelain carries the same green
+ * bias as the ink, so the two read as one family instead of grey-by-default.
+ */
 
-.dark {
-  color-scheme: dark;
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #18181b;
-  --card-foreground: #fafafa;
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
-  --primary: #6366f1;
+:root {
+  color-scheme: light;
+
+  /* Ground and ink */
+  --paper: #edf0ee;
+  --paper-raised: #f6f8f6;
+  --background: #edf0ee;
+  --foreground: #0b1d1a;
+  --card: #ffffff;
+  --card-foreground: #0b1d1a;
+  --popover: #ffffff;
+  --popover-foreground: #0b1d1a;
+  --muted: #e4e9e6;
+  --muted-foreground: #5a6b66;
+  --secondary: #e4e9e6;
+  --secondary-foreground: #0b1d1a;
+  --accent: #dde4e0;
+  --accent-foreground: #0b1d1a;
+  --border: #d7ded9;
+  --input: #c9d3cd;
+
+  /* The dominant field — masthead, and anything that should read as the system
+   * itself speaking rather than a surface a person edits. */
+  --rail: #0a2e2b;
+  --rail-2: #103f3a;
+  --rail-foreground: #eaf2ef;
+
+  /* The single sharp accent. Primary action, the active tab, the focus ring —
+   * and nothing else, so that seeing it always means "this is the way on". */
+  --primary: #dc4b2e;
   --primary-foreground: #ffffff;
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
-  --muted: #18181b;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444;
+  --ring: #dc4b2e;
+
+  /* State. Six hues because there are six things that can be true of a job, and
+   * a person scanning a list reads the colour before the word. */
+  --state-open: #5c7480;
+  --state-open-bg: #e8eef1;
+  --state-funded: #9a6b05;
+  --state-funded-bg: #f7eeda;
+  --state-submitted: #0e6e7d;
+  --state-submitted-bg: #dff0f2;
+  --state-settled: #1b7a4b;
+  --state-settled-bg: #ddf0e5;
+  --state-refunded: #96304a;
+  --state-refunded-bg: #f8e3e8;
+  --state-timeout: #63548c;
+  --state-timeout-bg: #eae7f4;
+
+  /* Kept for anything still speaking in these terms. Settled and refunded are
+   * the same statements about money, so they resolve to the same hues. */
+  --success: #1b7a4b;
+  --success-foreground: #ffffff;
+  --warning: #9a6b05;
+  --warning-foreground: #ffffff;
+  --destructive: #96304a;
   --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #6366f1;
+
+  --chart-1: #0a2e2b;
+  --chart-2: #1b7a4b;
+  --chart-3: #9a6b05;
+  --chart-4: #0e6e7d;
+  --chart-5: #96304a;
+
+  --radius: 0.7rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b1d1a;
+  --sidebar-primary: #dc4b2e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4e9e6;
+  --sidebar-accent-foreground: #0b1d1a;
+  --sidebar-border: #d7ded9;
+  --sidebar-ring: #dc4b2e;
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
+  html {
+    background-color: var(--paper);
+  }
+
+  /* Atmosphere, not a flat fill. Two soft washes give the page a light source,
+   * and hairlines every 28px make it ruled paper — which is what a ledger is.
+   *
+   * Painted onto the body itself rather than a pseudo-element behind it: at
+   * z-index -1 the body's own background colour covered the lot and the page
+   * rendered flat. Fixed attachment keeps the rule lines still while content
+   * scrolls across them, so the paper stays paper.
+   */
   body {
-    @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply text-foreground antialiased;
+    background-color: transparent;
+    background-attachment: fixed;
+    background-image:
+      radial-gradient(60rem 36rem at 10% -10%, rgba(16, 63, 58, 0.10), transparent 60%),
+      radial-gradient(46rem 32rem at 104% 4%, rgba(220, 75, 46, 0.07), transparent 58%),
+      repeating-linear-gradient(
+        to bottom,
+        rgba(11, 29, 26, 0.045) 0px,
+        rgba(11, 29, 26, 0.045) 1px,
+        transparent 1px,
+        transparent 28px
+      );
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+
+  /* The display face carries headings; prose stays in Public Sans. Set here so
+   * a new view cannot quietly opt out of the type system. */
+  h1, h2, h3 {
+    font-family: var(--font-display), var(--font-sans), sans-serif;
+    letter-spacing: -0.015em;
+  }
+
+  /* Money and addresses line up or they are not worth printing. */
+  .tabular,
+  code,
+  kbd,
+  samp {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: rgba(220, 75, 46, 0.18);
+  }
+}
+
+@layer components {
+  /* One state pill, driven by data-state, so a status can never be tinted by
+   * hand into meaning something it does not. */
+  .state-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+    color: var(--pill-fg);
+    background: var(--pill-bg);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pill-fg) 18%, transparent);
+  }
+  .state-pill[data-state="open"] { --pill-fg: var(--state-open); --pill-bg: var(--state-open-bg); }
+  .state-pill[data-state="funded"] { --pill-fg: var(--state-funded); --pill-bg: var(--state-funded-bg); }
+  .state-pill[data-state="submitted"] { --pill-fg: var(--state-submitted); --pill-bg: var(--state-submitted-bg); }
+  .state-pill[data-state="settled"] { --pill-fg: var(--state-settled); --pill-bg: var(--state-settled-bg); }
+  .state-pill[data-state="refunded"] { --pill-fg: var(--state-refunded); --pill-bg: var(--state-refunded-bg); }
+  .state-pill[data-state="timeout"] { --pill-fg: var(--state-timeout); --pill-bg: var(--state-timeout-bg); }
+
+  /* Cards sit on paper, so they are lifted by a hairline and a whisper of
+   * shadow rather than the heavy drop shadow that makes a light UI muddy. */
+  .sheet {
+    @apply rounded-xl border border-border bg-card;
+    box-shadow:
+      0 1px 1px rgba(11, 29, 26, 0.04),
+      0 6px 18px -12px rgba(11, 29, 26, 0.22);
   }
 }
 
@@ -87,5 +175,51 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* The page load, orchestrated once. Sections rise in sequence so the eye is
+   * led from the masthead down, and each lands before the next begins. It runs
+   * on first paint only — a reveal that replays on every tab change stops being
+   * an arrival and becomes a stutter. */
+  .rise {
+    animation: rise 0.5s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+  }
+  .rise-1 { animation-delay: 60ms; }
+  .rise-2 { animation-delay: 130ms; }
+  .rise-3 { animation-delay: 200ms; }
+  .rise-4 { animation-delay: 270ms; }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 12px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .masthead-in {
+    animation: masthead 0.55s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+  }
+
+  @keyframes masthead {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -10px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Anyone who has asked not to be moved gets the arrangement, not the arrival. */
+  @media (prefers-reduced-motion: reduce) {
+    .rise,
+    .masthead-in {
+      animation: none;
+    }
   }
 }

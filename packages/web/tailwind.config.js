@@ -49,6 +49,15 @@ module.exports = {
           DEFAULT: "var(--warning)",
           foreground: "var(--warning-foreground)",
         },
+        rail: {
+          DEFAULT: "var(--rail)",
+          2: "var(--rail-2)",
+          foreground: "var(--rail-foreground)",
+        },
+        paper: {
+          DEFAULT: "var(--paper)",
+          raised: "var(--paper-raised)",
+        },
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",
@@ -70,6 +79,8 @@ module.exports = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Reserved for headings and figures — the voice of the thing, not its prose.
+        display: ["var(--font-display)", "var(--font-sans)", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
     },
