@@ -582,6 +582,83 @@ packages/
 scripts/       dev.sh, demo-reset.sh, preflight.ts, new-accounts.ts
 ```
 
+### The flow of one job
+
+Everything below is the backend. The person appears only twice — to say what they
+want, and to approve the commission — and after that the agents transact with
+each other.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Person
+    participant Web as Web · /api
+    participant Asst as Assistant agent<br/>(runtime)
+    participant PG as PostgreSQL
+    participant Job as JobContract
+    participant Prov as Provider agent<br/>(runtime worker)
+    participant C as Agent C<br/>(separate process)
+    participant Mod as EvaluatorModule
+    participant Idx as Indexer
+
+    Person->>Web: describes what they want
+    Web->>Asst: POST /agents/:id/chat
+    Note over Asst: reads the directory; the model picks a<br/>provider whose service covers the request,<br/>or declines rather than guessing
+    Asst-->>Web: brief + providerId
+    Web-->>Person: brief, price and published terms
+
+    Person->>Web: commission it
+    Web->>Asst: POST /agents/:id/hire
+
+    Asst->>Job: createJob(provider, evaluator, amount)
+    Job-->>Asst: JobCreated(jobId)
+    Note over Asst: sent alone, because its jobId keys<br/>everything after it
+    Asst->>PG: store the brief — runtime.job_work
+    Note over Asst,PG: stored BEFORE funding: JobFunded wakes the<br/>worker, which has nothing to build without it
+    Asst->>Job: approve + fundJob — one user operation
+
+    Job--)Prov: JobFunded
+    Prov->>PG: read the brief
+    Note over Prov: the model produces the work in the<br/>form this provider declared it sells
+    Prov->>PG: store the deliverable
+    Prov->>Job: submitDeliverable(jobId, keccak256(work))
+
+    Job--)C: DeliverableSubmitted
+    Note over C: acts only where it is the assigned evaluator
+    C->>Prov: GET /commission/:jobId
+    C->>Prov: GET /deliverable/:jobId
+    Note over C: re-derives keccak256 and refuses a<br/>mismatch before spending a token on judging
+    Note over C: grades against the terms the seller<br/>published in advance, and signs the verdict
+    C->>Mod: submitApproval(jobId, hash, approved, signature)
+    Note over Mod: ECDSA.recover(signature) must equal<br/>job.evaluator, and the hash must match
+
+    alt approved
+        Mod->>Job: settle — escrow to the provider
+    else rejected
+        Mod->>Job: cancel — escrow back to the client
+    end
+
+    opt evaluator silent past the deadline
+        Prov->>Job: claimTimeout — the provider takes the fee
+    end
+
+    Job--)Idx: every event
+    Idx->>PG: upsert into the public schema
+    Web->>PG: reads indexed history for the interface
+```
+
+Three things in that sequence are the whole argument.
+
+**The client never grades its own job.** Agent C runs as its own process on its own
+key, and `settle` is reachable only through `EvaluatorModule`.
+
+**The evaluator cannot be lied to about what it judged.** It re-derives the hash
+from the bytes it fetched and compares it to what the provider committed on
+chain, so the work that was graded is the work that was submitted.
+
+**A silent evaluator cannot withhold a fee for ever.** Past the deadline the
+provider takes the payment itself — the `claimTimeout` branch above.
+
 ### 7.1 Smart contracts
 
 **`JobContract`** — the job lifecycle and the escrow. It holds the USDC and is
