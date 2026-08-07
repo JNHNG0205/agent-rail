@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAuthedFetch } from "@/lib/session";
 
@@ -97,7 +97,13 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
       const res = await authedFetch("/api/runtime/agents", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, role: "provider", service: offer }),
+        // Trimmed, because these become permanent terms: stray whitespace is
+        // part of a promise the evaluator reads on every future job.
+        body: JSON.stringify({
+          name,
+          role: "provider",
+          service: { ...offer, requirements: offer.requirements.map((r) => r.trim()) },
+        }),
       });
       const body = (await res.json()) as { name: string; address: string } | { error: string };
       if ("error" in body) throw new Error(body.error);
@@ -111,6 +117,7 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
   }
 
   const busy = stage === "working";
+  const blankRequirement = offer?.requirements.some((r) => r.trim().length === 0) ?? false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -186,13 +193,73 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
                 </label>
 
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Every delivery is graded against these, and payment depends on them:
+                  Every delivery is graded against these, and payment depends on them.
+                  They apply to <strong>every job this agent ever takes</strong>, so a
+                  term naming one buyer&rsquo;s choice — a colour, a title — refunds the
+                  next buyer who wants something else. Edit anything that reads that way.
                 </p>
-                <ul className="mt-1.5 list-disc pl-5 text-sm">
-                  {offer.requirements.map((r) => (
-                    <li key={r}>{r}</li>
+
+                {/* Editable, because these are permanent. The model proposes them
+                    from a sentence and sometimes writes a specific value where the
+                    buyer's request belongs; registration is soulbound, so the last
+                    chance to correct that is here. */}
+                <ul className="mt-2 space-y-1.5">
+                  {offer.requirements.map((r, i) => (
+                    // Index keys: the text is what changes as it is edited, so
+                    // keying on it would remount the field on every keystroke.
+                    <li key={i} className="flex items-center gap-1.5">
+                      <input
+                        value={r}
+                        onChange={(e) => {
+                          const next = [...offer.requirements];
+                          next[i] = e.target.value;
+                          setOffer({ ...offer, requirements: next });
+                        }}
+                        aria-label={`Requirement ${i + 1}`}
+                        className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOffer({
+                            ...offer,
+                            requirements: offer.requirements.filter((_, j) => j !== i),
+                          })
+                        }
+                        disabled={offer.requirements.length <= 2}
+                        aria-label={`Remove requirement ${i + 1}`}
+                        title={
+                          offer.requirements.length <= 2
+                            ? "Two terms is the minimum"
+                            : "Remove this term"
+                        }
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </li>
                   ))}
                 </ul>
+
+                {offer.requirements.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOffer({ ...offer, requirements: [...offer.requirements, ""] })
+                    }
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    Add a term
+                  </button>
+                )}
+
+                {blankRequirement && (
+                  <p className="mt-2 text-xs text-destructive">
+                    A blank term can never be met, so it would refund every job. Fill it
+                    in or remove it.
+                  </p>
+                )}
               </div>
             )}
 
@@ -205,7 +272,11 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
                   <Button variant="ghost" onClick={() => setStage("describe")} disabled={busy}>
                     Back
                   </Button>
-                  <Button className="flex-1" onClick={() => void create()} disabled={busy}>
+                  <Button
+                    className="flex-1"
+                    onClick={() => void create()}
+                    disabled={busy || blankRequirement}
+                  >
                     {busy && <Loader2 className="size-4 animate-spin" />}
                     Create agent
                   </Button>

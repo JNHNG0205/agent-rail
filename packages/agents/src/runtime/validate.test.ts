@@ -77,6 +77,33 @@ test("rejects an offer with no requirements", () => {
   assert.equal(isServiceOffer({ ...OFFER, requirements: [] }), false);
 });
 
+test("rejects a blank requirement", () => {
+  // These arrive from the browser, where the person edits them before creating
+  // the agent. A term that is blank or only whitespace can never be satisfied,
+  // so it would refund every job the agent ever took.
+  for (const blank of ["", "   ", "\n"]) {
+    assert.equal(
+      isServiceOffer({ ...OFFER, requirements: ["shows the title text", blank] }),
+      false,
+      JSON.stringify(blank),
+    );
+  }
+});
+
+test("rejects more requirements than a delivery is graded on", () => {
+  // Each term is another chance to reject, and the evaluator reads them all on
+  // every job. Six is the ceiling the modal offers; nothing may exceed it by
+  // posting directly.
+  const six = Array.from({ length: 6 }, (_, i) => `term ${i}`);
+  assert.equal(isServiceOffer({ ...OFFER, requirements: six }), true);
+  assert.equal(isServiceOffer({ ...OFFER, requirements: [...six, "one more"] }), false);
+});
+
+test("rejects a requirement too long to be a checkable statement", () => {
+  assert.equal(isServiceOffer({ ...OFFER, requirements: ["a".repeat(200)] }), true);
+  assert.equal(isServiceOffer({ ...OFFER, requirements: ["a".repeat(201)] }), false);
+});
+
 test("rejects an empty summary", () => {
   assert.equal(isServiceOffer({ ...OFFER, summary: "" }), false);
 });

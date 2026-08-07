@@ -99,9 +99,16 @@ export function isServiceOffer(value: unknown): value is ServiceOffer {
     // Absent means uncategorised, for the same reason as deliverable: agents
     // created before this existed have no such key and must keep working.
     (v.category === undefined || isServiceCategory(v.category)) &&
+    // The person edits these before creating the agent, so what arrives here is
+    // theirs rather than the model's. Bound it: a blank term can never be met
+    // and would refund every job, and terms are graded one model call at a
+    // time, so an unbounded list is an unbounded bill.
     Array.isArray(v.requirements) &&
     v.requirements.length > 0 &&
-    v.requirements.every((r) => typeof r === "string")
+    v.requirements.length <= 6 &&
+    v.requirements.every(
+      (r) => typeof r === "string" && r.trim().length > 0 && r.length <= 200,
+    )
   );
 }
 

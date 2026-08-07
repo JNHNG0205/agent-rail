@@ -20,7 +20,7 @@ import type { ServiceOffer } from "./store.js";
 /// edits them. Proposing rather than deciding matters: the agent's creator is
 /// the one who has to live with what it promised.
 
-interface RawOffer {
+export interface RawOffer {
   summary: string;
   priceUsdc: string;
   deliverable: string;
@@ -49,13 +49,13 @@ const OFFER_SCHEMA = {
       type: "string",
       enum: [...DELIVERABLE_KINDS],
       description:
-        "The form the work takes. 'svg' for anything drawn — posters, diagrams, logos. 'markdown' for structured documents. 'text' for prose.",
+        "The form the work takes. 'svg' for anything drawn — posters, diagrams, logos. 'markdown' for structured documents. 'text' for everything else, including prose, code and markup such as HTML.",
     },
     requirements: {
       type: "array",
       items: { type: "string" },
       description:
-        "Three or four short statements an evaluator can check by looking at the delivered file. Each must be objectively true or false — 'shows the title text', not 'looks professional'.",
+        "Three or four short statements an evaluator can check by reading the delivered file. Each must be objectively true or false — 'shows the title text', not 'looks professional' — and must hold for EVERY job this agent takes. Where the buyer chooses the value, refer to their request ('uses the colours the buyer asked for') rather than naming one ('uses red'), which would bind every future delivery to it.",
     },
   },
   required: ["summary", "priceUsdc", "deliverable", "category", "requirements"],
@@ -82,20 +82,29 @@ const SYSTEM = [
   "You define what an AI provider agent sells.",
   "",
   "Choose the form the work takes from what is offered, based on what the agent",
-  "actually does — a designer delivers svg, a writer delivers markdown or text.",
+  "actually does — a designer delivers svg, a writer of structured documents",
+  "delivers markdown, and anything else, including prose, code and markup such as",
+  "HTML, delivers text.",
   "",
   "A separate evaluator agent grades every delivery against the requirements you",
   "write, and releases escrowed payment only if they are met — so each",
   "requirement must be something that agent can verify by reading the delivered",
   "work itself.",
   "",
-  "Write three or four. Each must be objectively true or false: 'shows the title",
-  "text' is checkable, 'looks professional' is not. Prefer requirements about",
-  "content that is present, because absence is what an evaluator can detect.",
+  "These requirements are published once, when the agent is created, and then",
+  "applied unchanged to every job it ever takes. Write what the seller guarantees",
+  "about any delivery, never a detail that one buyer happens to want.",
   "",
-  "Keep colour requirements to one line naming at most two colours — a delivery",
-  "that misses any colour named will be rejected, so more colours means more",
-  "rejections.",
+  "So when the buyer is the one who chooses something — the colours, the title,",
+  "the subject, the length — refer to their request instead of naming a value:",
+  "'uses the colours the buyer asked for', never 'uses red'. A named value",
+  "becomes a promise this agent must keep on every future job, and the next buyer",
+  "who wants something else gets a refund for work that was actually correct.",
+  "",
+  "Write three or four. Each must be objectively true or false from reading the",
+  "delivered work: 'includes a heading' is checkable, 'looks professional' is",
+  "not. Prefer requirements about content that is present, because absence is",
+  "what an evaluator can detect.",
 ].join("\n");
 
 /// A service offer proposed from a plain-language purpose.
@@ -123,13 +132,27 @@ export async function proposeOffer(name: string, purpose: string): Promise<Servi
     isRawOffer,
   );
 
+  return normaliseOffer(raw);
+}
+
+/// Bring a proposal within the bounds the rest of the system assumes.
+///
+/// Separate from the request so it can be tested without a model, and applied
+/// after it so a provider that ignores the schema still cannot register terms
+/// nothing can satisfy.
+export function normaliseOffer(raw: RawOffer): ServiceOffer {
   return {
-    summary: raw.summary,
+    summary: raw.summary.trim(),
     priceUsdc: String(Math.max(1, Math.min(100, Math.round(Number(raw.priceUsdc))))),
     deliverable: raw.deliverable as DeliverableKind,
     category: raw.category as ServiceCategory,
     // Four is the ceiling: each one is another chance to reject, and a provider
-    // that fails most of its jobs is not a demonstration of anything.
-    requirements: raw.requirements.slice(0, 4),
+    // that fails most of its jobs is not a demonstration of anything. Blank
+    // entries are dropped before the cap, so a stray empty string cannot use up
+    // one of the four and leave the agent graded on three.
+    requirements: raw.requirements
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0)
+      .slice(0, 4),
   };
 }
