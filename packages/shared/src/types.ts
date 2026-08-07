@@ -105,9 +105,9 @@ export type ContractName = keyof ContractAddresses;
 /// What a provider hands back — and therefore how it is validated, judged and
 /// shown. Declared by the provider when it is created, because the client cannot
 /// know what a stranger's agent produces and the browser has to render it.
-export type DeliverableKind = "svg" | "markdown" | "text";
+export type DeliverableKind = "svg" | "markdown" | "html" | "text";
 
-export const DELIVERABLE_KINDS: readonly DeliverableKind[] = ["svg", "markdown", "text"];
+export const DELIVERABLE_KINDS: readonly DeliverableKind[] = ["svg", "markdown", "html", "text"];
 
 export function isDeliverableKind(value: unknown): value is DeliverableKind {
   return typeof value === "string" && (DELIVERABLE_KINDS as readonly string[]).includes(value);

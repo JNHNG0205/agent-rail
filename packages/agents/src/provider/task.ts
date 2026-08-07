@@ -1,6 +1,7 @@
 import type { DeliverableKind, JobBrief } from "@agentrail/shared";
 import { completeValidated, stripFences } from "../lib/llm.js";
 import { isAcceptableSvg, unsafeReason } from "./svg.js";
+import { isAcceptableHtml, unsafeHtmlReason } from "./html.js";
 
 /// Doing the work a provider was hired for.
 ///
@@ -49,21 +50,45 @@ const MARKDOWN_RULES: Rules = {
   accept: (value) => value.trim().length >= 40,
 };
 
+/// The catch-all kind, so this must not forbid what it is the only home for.
+/// It used to say "no markup", which contradicted the service description of
+/// every provider selling HTML or code: those are not drawings and not
+/// structured documents, so they arrive here and were then told not to produce
+/// the thing they sell.
 const TEXT_RULES: Rules = {
   system: [
-    "You produce plain text.",
+    "You produce the finished work as a single text document.",
     "",
     "Rules:",
-    "- Reply with the finished work and nothing else. No preamble, no commentary about it.",
-    "- No markup, no code fences.",
+    "- Reply with the work itself and nothing else. No preamble, no commentary, no code fences.",
+    "- Deliver it in the form your service describes: if you sell code or markup such as",
+    "  an HTML page, deliver exactly that, complete and ready to use. If you sell prose,",
+    "  deliver prose with no markup.",
   ].join("\n"),
-  expectation: "the reply must be the finished work as plain text, with no preamble",
+  expectation: "the reply must be the finished work itself, with no preamble or code fences",
   accept: (value) => value.trim().length >= 20,
+};
+
+const HTML_RULES: Rules = {
+  system: [
+    "You produce complete, self-contained HTML pages.",
+    "",
+    "Rules:",
+    "- Reply with ONE complete HTML document and nothing else. No prose, no markdown fences.",
+    "- Start with <!DOCTYPE html> and end with </html>.",
+    "- Put all styling in a <style> element. No script, no event handlers such as onclick.",
+    "- Load nothing from another server: no remote images, fonts or stylesheets. A plain",
+    "  <a href> link is fine.",
+  ].join("\n"),
+  expectation:
+    "the reply must be one complete HTML document, self-contained, with no script and nothing loaded from another server",
+  accept: isAcceptableHtml,
 };
 
 const RULES: Record<DeliverableKind, Rules> = {
   svg: SVG_RULES,
   markdown: MARKDOWN_RULES,
+  html: HTML_RULES,
   text: TEXT_RULES,
 };
 
@@ -85,6 +110,15 @@ function mockDeliverable(kind: DeliverableKind, brief: JobBrief): string {
     brief.requirements[0] ?? "",
   )}</text>
 </svg>`;
+  }
+  if (kind === "html") {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Delivered</title>
+<style>body{font-family:Georgia,serif;background:#F4F1EA;color:#3A3A3A;padding:3rem}</style></head>
+<body><h1>${escapeXml(brief.request.slice(0, 80))}</h1>
+<ul>${brief.requirements.map((r) => `<li>${escapeXml(r)}</li>`).join("")}</ul></body>
+</html>`;
   }
   const body = [
     `Delivered work for: ${brief.request}`,
@@ -143,6 +177,10 @@ export async function runTask(opts: TaskOptions): Promise<string> {
   if (opts.kind === "svg") {
     const unsafe = unsafeReason(output);
     if (unsafe) throw new Error(`provider produced an unsafe SVG: ${unsafe}`);
+  }
+  if (opts.kind === "html") {
+    const unsafe = unsafeHtmlReason(output);
+    if (unsafe) throw new Error(`provider produced an unsafe HTML page: ${unsafe}`);
   }
   return output;
 }

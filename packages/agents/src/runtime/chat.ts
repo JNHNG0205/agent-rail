@@ -147,6 +147,26 @@ export interface ProviderOffer {
   service: ServiceOffer;
 }
 
+/// Resolve the provider the model named, or nothing.
+///
+/// The model names a provider; it does not get to invent one. This used to fall
+/// back to offers[0] — the cheapest — whenever the named id was unrecognised,
+/// on the reasoning that hiring someone beat failing the conversation. It does
+/// not. Funding comes before the provider starts, so hiring an agent that does
+/// not do the work buys a refund at best and the timeout at worst, and the
+/// person is told their job is under way either way.
+///
+/// One offer is the exception: there is no other agent an unrecognised id could
+/// have meant, so nothing is being guessed.
+export function chooseProvider(
+  offers: ProviderOffer[],
+  providerId: string,
+): ProviderOffer | undefined {
+  const named = offers.find((o) => o.id === providerId);
+  if (named) return named;
+  return offers.length === 1 ? offers[0] : undefined;
+}
+
 export async function chat(opts: {
   agent: AgentRecord;
   history: ChatMessage[];
@@ -163,31 +183,36 @@ export async function chat(opts: {
       maxTokens: 800,
       schemaName: "agent_reply",
       schema: REPLY_SCHEMA,
+      // Offline, the person's own words are the brief. A fixed poster here made
+      // every mock commission a poster whatever was asked for — the same way a
+      // hardcoded prompt once made the whole marketplace a poster marketplace.
       mock: {
         message: "Got it — ready to commission that.",
         ready: true,
-        request:
-          "A poster for AgentRail Demo Day, subtitled 'Autonomous agents settling payments on chain', calling the reader to join us, in deep blue and amber.",
+        request: opts.history.filter((m) => m.role === "user").at(-1)?.content ?? "",
         providerId: opts.offers[0]?.id ?? "",
       },
     },
     isRawReply,
   );
 
-  // The model names a provider; it does not get to invent one. An id that is
-  // not on offer falls back to the cheapest, which is the old behaviour and
-  // still better than failing the conversation.
-  const chosen =
-    opts.offers.find((o) => o.id === raw.providerId) ?? (raw.ready ? opts.offers[0] : undefined);
+  const chosen = chooseProvider(opts.offers, raw.providerId);
+  const ready = raw.ready && chosen !== undefined;
 
   return {
-    message: raw.message,
-    ready: raw.ready,
-    providerId: raw.ready ? (chosen?.id ?? null) : null,
+    // Saying "ready to commission that" and then commissioning nothing reads as
+    // the app losing the request, so when no provider could be identified the
+    // agent says that instead of the model's confident line.
+    message:
+      raw.ready && !chosen
+        ? "I could not tell which agent to hire for that — could you say a little more about what you need?"
+        : raw.message,
+    ready,
+    providerId: ready ? (chosen?.id ?? null) : null,
     // The terms come from the chosen provider, never from the model. Showing a
     // different provider's terms would ask the user to approve a commission
     // under conditions that will not apply to it.
-    brief: raw.ready
+    brief: ready
       ? { request: raw.request, requirements: chosen?.service.requirements ?? [] }
       : null,
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DeliverableKind } from "@agentrail/shared";
 import { useAuthedFetch, useSession } from "@/lib/session";
 
 /// Talking to your agent, and getting it to commission work. Member 4.
@@ -22,7 +23,7 @@ export interface JobBrief {
   requirements: string[];
 }
 
-export type DeliverableKind = "svg" | "markdown" | "text";
+export type { DeliverableKind };
 
 export interface RuntimeAgent {
   id: string;

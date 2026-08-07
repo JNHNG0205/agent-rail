@@ -203,7 +203,13 @@ function JobCard({
                     "w-full rounded-xl border border-border bg-white",
                     // A poster is portrait; a document is not, and forcing one
                     // into that shape wastes most of the frame on white space.
-                    job.kind === "svg" ? "aspect-[3/4]" : "h-80",
+                    // A page is laid out for a screen, so it gets the most room
+                    // — a landing page in a document-sized frame is all scrollbar.
+                    job.kind === "svg"
+                      ? "aspect-[3/4]"
+                      : job.kind === "html"
+                        ? "h-[32rem]"
+                        : "h-80",
                   )}
                 />
                 )}

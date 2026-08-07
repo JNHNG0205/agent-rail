@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { DeliverableKind } from "@agentrail/shared";
 import { Loader2, Plus, Sparkles, X } from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAuthedFetch } from "@/lib/session";
@@ -23,7 +24,7 @@ interface ServiceOffer {
   /// The form the work takes, proposed from the purpose. Shown before creation
   /// because it decides what the agent will be asked to produce for every job
   /// it ever takes, and a registration cannot be undone.
-  deliverable: "svg" | "markdown" | "text";
+  deliverable: DeliverableKind;
   requirements: string[];
 }
 

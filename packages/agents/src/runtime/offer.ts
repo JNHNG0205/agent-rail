@@ -49,7 +49,7 @@ const OFFER_SCHEMA = {
       type: "string",
       enum: [...DELIVERABLE_KINDS],
       description:
-        "The form the work takes. 'svg' for anything drawn — posters, diagrams, logos. 'markdown' for structured documents. 'text' for everything else, including prose, code and markup such as HTML.",
+        "The form the work takes. 'svg' for anything drawn — posters, diagrams, logos. 'markdown' for structured documents. 'html' for a rendered web page. 'text' for everything else, including prose and source code.",
     },
     requirements: {
       type: "array",
@@ -83,8 +83,8 @@ const SYSTEM = [
   "",
   "Choose the form the work takes from what is offered, based on what the agent",
   "actually does — a designer delivers svg, a writer of structured documents",
-  "delivers markdown, and anything else, including prose, code and markup such as",
-  "HTML, delivers text.",
+  "delivers markdown, a page or site builder delivers html, and anything else,",
+  "including prose and source code, delivers text.",
   "",
   "A separate evaluator agent grades every delivery against the requirements you",
   "write, and releases escrowed payment only if they are met — so each",

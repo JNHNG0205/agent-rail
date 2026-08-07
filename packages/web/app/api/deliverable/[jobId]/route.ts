@@ -46,6 +46,10 @@ interface DirectoryEntry {
 const CONTENT_TYPES: Record<string, string> = {
   svg: "image/svg+xml",
   markdown: "text/markdown; charset=utf-8",
+  // Safe to render: the CSP below allows no script and no remote load, the
+  // preview frame is sandboxed, and the provider's bytes were refused if they
+  // contained either.
+  html: "text/html; charset=utf-8",
   text: "text/plain; charset=utf-8",
 };
 
@@ -54,6 +58,7 @@ const CONTENT_TYPES: Record<string, string> = {
 const EXTENSIONS: Record<string, string> = {
   svg: "svg",
   markdown: "md",
+  html: "html",
   text: "txt",
 };
 
