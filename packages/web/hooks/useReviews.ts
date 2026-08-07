@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "@/lib/errors";
 
 /// The evaluator's reasoning, by job id. Member 4.
 ///
@@ -39,7 +40,7 @@ export function useReviews(signal?: string, limit = 200) {
       setByJob(new Map((body.reviews ?? []).map((r) => [r.jobId, r])));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not load the rulings");
+      setError(errorMessage(err, "could not load the rulings"));
     } finally {
       setLoading(false);
     }

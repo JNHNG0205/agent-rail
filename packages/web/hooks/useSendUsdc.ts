@@ -6,6 +6,7 @@ import { useWallets } from "@privy-io/react-auth";
 import { CHAIN_ID, MockUSDCAbi, addresses, parseUsdc, formatUsdc } from "@agentrail/shared";
 import { chain } from "@/lib/viem";
 import { useAuthedFetch, useSession } from "@/lib/session";
+import { errorMessage } from "@/lib/errors";
 
 /// Send USDC from your own wallet. Member 4.
 ///
@@ -63,7 +64,7 @@ export function useSendUsdc() {
         // so what is quoted here is what the chain receives.
         amount = parseUsdc(amountUsdc);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "that is not a USDC amount");
+        setError(errorMessage(err, "that is not a USDC amount"));
         return null;
       }
       if (amount <= 0n) {
@@ -115,7 +116,7 @@ export function useSendUsdc() {
         setStage("confirming");
         return hash;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "the transfer did not go through");
+        setError(errorMessage(err, "the transfer did not go through"));
         return null;
       } finally {
         setStage("idle");

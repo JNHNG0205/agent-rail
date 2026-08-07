@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { JOB_STATE_LABELS, type JobState } from "@agentrail/shared";
 import { readJobOnChain } from "@/lib/contracts";
+import { errorMessage } from "@/lib/errors";
 
 /// Follow one job to its conclusion and fetch what was produced. Member 4.
 ///
@@ -88,7 +89,7 @@ export function useJobResult(jobId: string | null): JobProgress {
         if (rows[0]) setOutcome(rows[0].outcome);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not read job state");
+      setError(errorMessage(err, "could not read job state"));
     }
   }, [jobId]);
 

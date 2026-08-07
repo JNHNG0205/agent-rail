@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AGENT_MODELS, agentModel, formatUsdc, type DeliverableKind } from "@agentrail/shared";
+import { AGENT_MODELS, agentModel, type DeliverableKind } from "@agentrail/shared";
+import { formatUsdc } from "@/lib/agentrail-data";
+import { describeError, errorMessage } from "@/lib/errors";
 import { Loader2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAuthedFetch, useSession } from "@/lib/session";
@@ -48,6 +50,7 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
   const [offer, setOffer] = useState<ServiceOffer | null>(null);
   const [stage, setStage] = useState<Stage>("describe");
   const [error, setError] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
   const [created, setCreated] = useState<{ name: string; address: string } | null>(null);
 
   useEffect(() => {
@@ -88,7 +91,7 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
       setOffer(body);
       setStage("confirm");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not propose a service");
+      setError(errorMessage(err, "could not propose a service"));
       setStage("describe");
     }
   }
@@ -96,6 +99,7 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
   async function create() {
     if (!offer) return;
     setError(null);
+    setCancelled(false);
     setStage("working");
     try {
       // Paid before it is created, and the runtime reads the transaction rather
@@ -124,7 +128,11 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
       setStage("done");
       onCreated?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not create the agent");
+      // Declining is a decision, not a fault. It keeps the form exactly as it
+      // was so the person can sign again without redoing any of it.
+      const failure = describeError(err, "could not create the agent");
+      setError(failure.message);
+      setCancelled(failure.cancelled);
       setStage("confirm");
     }
   }
@@ -145,7 +153,14 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
         </p>
 
         {error && (
-          <p className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p
+            className={
+              "mt-4 rounded-lg border px-3 py-2 text-sm " +
+              (cancelled
+                ? "border-border bg-secondary/60 text-muted-foreground"
+                : "border-destructive/40 bg-destructive/10 text-destructive")
+            }
+          >
             {error}
           </p>
         )}

@@ -6,6 +6,7 @@ import type { Agent } from "@/lib/agentrail-data";
 import { truncateHex } from "@/lib/agentrail-data";
 import { readAgentStats, type AgentStats } from "@/lib/contracts";
 import { useSession } from "@/lib/session";
+import { errorMessage } from "@/lib/errors";
 
 /// Every agent the system knows about, from the three sources that actually
 /// have data. Member 4.
@@ -124,7 +125,7 @@ export function useRegistry() {
         }),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not load agents");
+      setError(errorMessage(err, "could not load agents"));
     } finally {
       setLoading(false);
     }

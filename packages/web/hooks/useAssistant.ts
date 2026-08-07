@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeliverableKind } from "@agentrail/shared";
 import { useAuthedFetch, useSession } from "@/lib/session";
+import { errorMessage } from "@/lib/errors";
 
 /// Talking to your agent, and getting it to commission work. Member 4.
 ///
@@ -122,7 +123,7 @@ export function useAssistant() {
       if (!res.ok) throw new Error("the agent runtime is not reachable");
       setAgents((await res.json()) as RuntimeAgent[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not load agents");
+      setError(errorMessage(err, "could not load agents"));
     }
   }, []);
 
@@ -142,7 +143,7 @@ export function useAssistant() {
       if ("error" in body) throw new Error(body.error);
       setClient(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not reach your assistant");
+      setError(errorMessage(err, "could not reach your assistant"));
     }
   }, [signedIn, authedFetch]);
 
@@ -194,7 +195,7 @@ export function useAssistant() {
         setBrief(body.ready ? body.brief : null);
         setProviderId(body.ready ? body.providerId : null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "the agent could not reply");
+        setError(errorMessage(err, "the agent could not reply"));
       } finally {
         setThinking(false);
         busy.current = false;
@@ -249,7 +250,7 @@ export function useAssistant() {
       ]);
       setBrief(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not hire a provider");
+      setError(errorMessage(err, "could not hire a provider"));
     } finally {
       setHiring(false);
     }

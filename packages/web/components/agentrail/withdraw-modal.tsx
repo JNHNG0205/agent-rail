@@ -8,6 +8,7 @@ import { Button } from "@/ui/button";
 import { useAuthedFetch } from "@/lib/session";
 import type { Agent } from "@/lib/agentrail-data";
 import { Portal } from "@/components/agentrail/portal";
+import { errorMessage } from "@/lib/errors";
 
 /// Take an agent's earnings out to one of your own wallets. Member 4.
 ///
@@ -104,7 +105,7 @@ export function WithdrawModal({ open, agent, onClose, onWithdrawn }: Props) {
       setSent(body.txHash ?? "sent");
       onWithdrawn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "the withdrawal did not go through");
+      setError(errorMessage(err, "the withdrawal did not go through"));
     } finally {
       setBusy(false);
     }
