@@ -474,21 +474,89 @@ refused as unsafe, so a term demanding a working button could never be met.
 
 The only fixed role is the evaluator.
 
-### 6.2 Escrow with independent evaluation
+### 6.2 The escrow
 
-`JobContract` holds four states — Open, Funded, Submitted, Terminal — and money
-moves only on a verdict:
+Escrow is the part that makes the rest possible, so it is worth being precise
+about what happens to the money.
 
-- Terms are **published before hiring**, so what is judged cannot drift from
-  what was advertised. The client copies them verbatim and cannot soften them.
-- **Nobody approves their own payment.** `EvaluatorModule` recovers the signer
-  with ECDSA and compares it to the job's evaluator.
-- **A silent evaluator cannot withhold a fee indefinitely.** Past the deadline
-  the provider calls `claimTimeout` and takes the payment itself.
-- The deliverable is committed as a **keccak256 hash**. The evaluator re-derives
-  it from the bytes before grading, and the web application re-derives it again
-  before displaying anything — so provider-supplied content cannot be swapped
-  after the fact.
+**Neither party holds it.** When a job is funded, the USDC leaves the client's
+account and sits in `JobContract` itself. The client cannot spend it, the
+provider cannot touch it, and no administrator can move it — there is no
+function that lets anyone withdraw the balance. It leaves only along one of three
+paths, each written into the contract.
+
+**Funding comes before the work.** `fundJob` pulls the amount with
+`transferFrom`, which is why hiring is `approve` then `fundJob`. That order is
+the point of the whole design: a provider begins work already knowing the fee
+exists and is beyond the client's reach. Nothing wakes the provider until
+`JobFunded` is emitted, so a client cannot get work started without paying for
+it first.
+
+#### What each state means for the money
+
+| State | Where the USDC is | What can happen next |
+|---|---|---|
+| `Open` | still the client's | the client funds it, or either side cancels — nothing to refund |
+| `Funded` | in the contract | the provider delivers; the client or the evaluator can still cancel, refunding in full |
+| `Submitted` | in the contract, clock running | only the evaluator's verdict can move it — or the provider claims the timeout |
+| `Terminal` | paid out or returned | nothing; the job is over and cannot reopen |
+
+#### The three ways it ends
+
+**Settled.** The evaluator approves. `EvaluatorModule` recovers the signature,
+checks it against the job's evaluator and the committed hash, then calls
+`settle`, which transfers the amount to the provider and records a completion
+against its reputation. `settle` has no other caller: not the client, not the
+provider, not the contract's owner.
+
+**Refunded.** The evaluator rejects, and the same module calls `cancel`, which
+returns the full amount to the client. Nothing is deducted — there is no fee, no
+partial payment and no penalty, because the system has no opinion about whose
+fault a rejection was.
+
+**Timed out.** The deadline is 100 blocks after the deliverable is submitted —
+around three minutes on Base — and past it the provider calls `claimTimeout` and
+takes the payment. This exists because an evaluator that never answers would
+otherwise leave the fee locked for ever, and a provider that did the work should
+not lose it to somebody else's outage. Note where the clock starts: at
+submission, not at funding, so a slow provider is not punished by it.
+
+#### What stops each obvious attack
+
+- **The client cannot approve its own payment.** `settle` is callable only by
+  `EvaluatorModule`, and that module verifies an ECDSA signature against the
+  evaluator named in the job.
+- **The evaluator cannot be handed different work than it graded.**
+  `submitApproval` carries the hash it judged, and the module reverts with
+  `DeliverableMismatch` unless it equals what the provider committed on chain.
+- **A stranger cannot open a job between other people.** `createJob` reverts
+  with `NotRegistered` unless all three parties — client, provider *and*
+  evaluator — hold an identity token. The check is skipped if no identity
+  registry is wired at all, which keeps an unconfigured deployment permissionless;
+  `deploy.ts` always wires it.
+- **A refund cannot be replayed into a drain.** Every path sets `Terminal`
+  before it transfers, so a re-entrant call finds the wrong state and reverts.
+- **The owner cannot take the money.** Ownership can re-point the registries and
+  the evaluator module, which is a real power over future jobs, but there is no
+  path by which it moves escrowed funds.
+
+#### What the escrow does not do
+
+Stating these plainly is more useful than implying the design is complete.
+
+- **There is no appeal.** One evaluator rules once, and its decision is final.
+  A rejected provider has no recourse, and a client who thinks a bad delivery was
+  approved has none either.
+- **The evaluator is a single party.** It cannot pay itself and cannot be
+  impersonated, but it can be wrong, and it can be down — in which case every job
+  ends by timeout, paying providers for work nobody checked.
+- **The client can cancel a funded job before delivery.** A provider that has
+  started work but not yet submitted can have the escrow withdrawn from under it.
+  A production design would either lock funding at submission or compensate the
+  partial work.
+- **The timeout is short.** Three minutes suits a demonstration and would be
+  indefensible on a real network, where an evaluator restart would hand away every
+  fee in flight.
 
 ### 6.3 Soulbound identity and reputation
 
