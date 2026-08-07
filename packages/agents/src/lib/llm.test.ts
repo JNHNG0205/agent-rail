@@ -140,7 +140,7 @@ test("openrouter provider retries when the response has no content and succeeds 
   assert.equal(calls(), 2);
 });
 
-test("openrouter provider throws a named error after two consecutive non-ok responses", async () => {
+test("openrouter provider throws a named error after four consecutive non-ok responses", async () => {
   process.env.LLM_PROVIDER = "openrouter";
   process.env.LLM_API_KEY = "sk-or-test";
   process.env.LLM_MODEL = "some/model";
@@ -151,9 +151,9 @@ test("openrouter provider throws a named error after two consecutive non-ok resp
   }) as typeof fetch;
   await assert.rejects(
     () => complete({ system: "s", user: "u", mock: "unused" }),
-    /failed after 2 attempts/,
+    /failed after 4 attempts/,
   );
-  assert.equal(calls, 2);
+  assert.equal(calls, 4);
 });
 
 test("a cased LLM_PROVIDER value still takes the mock path", async () => {
@@ -172,7 +172,7 @@ test("an unknown LLM_PROVIDER value throws a named error", async () => {
   );
 });
 
-test("openrouter provider catches a rejecting fetch, retries, and throws after the second attempt", async () => {
+test("openrouter provider catches a rejecting fetch, retries, and throws once the attempts are exhausted", async () => {
   process.env.LLM_PROVIDER = "openrouter";
   process.env.LLM_API_KEY = "sk-or-test";
   process.env.LLM_MODEL = "some/model";
@@ -183,7 +183,7 @@ test("openrouter provider catches a rejecting fetch, retries, and throws after t
   }) as typeof fetch;
   await assert.rejects(
     () => complete({ system: "s", user: "u", mock: "unused" }),
-    /failed after 2 attempts: network down/,
+    /failed after 4 attempts: network down/,
   );
-  assert.equal(calls, 2);
+  assert.equal(calls, 4);
 });

@@ -105,6 +105,15 @@ const SYSTEM = [
   "delivered work: 'includes a heading' is checkable, 'looks professional' is",
   "not. Prefer requirements about content that is present, because absence is",
   "what an evaluator can detect.",
+  "",
+  "Keep each to one short sentence, well under twenty words. They are read on",
+  "every job and shown to the buyer; a paragraph is not a term.",
+  "",
+  "Never require something the delivered form is not allowed to contain. Drawings",
+  "and pages are refused if they carry script, event handlers such as onclick, or",
+  "anything loaded from another server — so a requirement asking for a working",
+  "button or a remote image can never be met, and would refund every job. Ask for",
+  "what is visible on the page instead.",
 ].join("\n");
 
 /// A service offer proposed from a plain-language purpose.

@@ -84,32 +84,49 @@ export function isJobBrief(value: unknown): value is JobBrief {
   );
 }
 
-export function isServiceOffer(value: unknown): value is ServiceOffer {
-  if (typeof value !== "object" || value === null) return false;
+/// Why an offer was refused, in words the person who typed it can act on.
+///
+/// The terms are editable in the browser now, so a refusal is something someone
+/// has to fix rather than a malformed request from a program. "a provider needs
+/// service {summary, priceUsdc, requirements[]}" describes the shape and not the
+/// problem — it does not say that one term ran four characters past the limit.
+export function serviceOfferProblem(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return "no service was given";
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.summary === "string" &&
-    v.summary.length > 0 &&
-    typeof v.priceUsdc === "string" &&
-    /^\d+(\.\d+)?$/.test(v.priceUsdc) &&
-    // Absent means svg: that is what every agent created before deliverable
-    // kinds existed produces, and rejecting them would strand soulbound
-    // identities that cannot be minted again.
-    (v.deliverable === undefined || isDeliverableKind(v.deliverable)) &&
-    // Absent means uncategorised, for the same reason as deliverable: agents
-    // created before this existed have no such key and must keep working.
-    (v.category === undefined || isServiceCategory(v.category)) &&
-    // The person edits these before creating the agent, so what arrives here is
-    // theirs rather than the model's. Bound it: a blank term can never be met
-    // and would refund every job, and terms are graded one model call at a
-    // time, so an unbounded list is an unbounded bill.
-    Array.isArray(v.requirements) &&
-    v.requirements.length > 0 &&
-    v.requirements.length <= 6 &&
-    v.requirements.every(
-      (r) => typeof r === "string" && r.trim().length > 0 && r.length <= 200,
-    )
-  );
+
+  if (typeof v.summary !== "string" || v.summary.trim().length === 0) {
+    return "the service needs a one-line summary";
+  }
+  if (typeof v.priceUsdc !== "string" || !/^\d+(\.\d+)?$/.test(v.priceUsdc)) {
+    return "the price must be a plain number of USDC";
+  }
+  if (v.deliverable !== undefined && !isDeliverableKind(v.deliverable)) {
+    return "that is not a form of work anything can produce";
+  }
+  if (v.category !== undefined && !isServiceCategory(v.category)) {
+    return "that is not a category in the directory";
+  }
+  if (!Array.isArray(v.requirements) || v.requirements.length === 0) {
+    return "add at least one term the work will be graded against";
+  }
+  if (v.requirements.length > 6) {
+    return `six terms is the most a delivery is graded on — this has ${v.requirements.length}`;
+  }
+  for (const [i, r] of v.requirements.entries()) {
+    if (typeof r !== "string" || r.trim().length === 0) {
+      return `term ${i + 1} is blank, and a blank term would refund every job`;
+    }
+    if (r.length > 200) {
+      return `term ${i + 1} is ${r.length} characters; keep each under 200`;
+    }
+  }
+  return null;
+}
+
+export function isServiceOffer(value: unknown): value is ServiceOffer {
+  // One rule, asked two ways: a guard for callers that only need yes or no, and
+  // a reason for the person who has to fix it. Two lists would drift.
+  return serviceOfferProblem(value) === null;
 }
 
 /// Treasury that funds a new agent's first operation. A smart account cannot pay
@@ -241,9 +258,10 @@ export function startRuntime(): Promise<Server> {
           json(400, { error: 'role must be "client" or "provider"' });
           return;
         }
-        if (b.role === "provider" && !isServiceOffer(b.service)) {
+        const problem = b.role === "provider" ? serviceOfferProblem(b.service) : null;
+        if (problem) {
           json(400, {
-            error: "a provider needs service {summary, priceUsdc, requirements[]}",
+            error: problem,
           });
           return;
         }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isJobBrief, isServiceOffer } from "./server.js";
+import { isJobBrief, isServiceOffer, serviceOfferProblem } from "./server.js";
 import { isChatHistory } from "./chat.js";
 
 /// The runtime's input boundary. Every one of these guards a request that spends
@@ -102,6 +102,24 @@ test("rejects more requirements than a delivery is graded on", () => {
 test("rejects a requirement too long to be a checkable statement", () => {
   assert.equal(isServiceOffer({ ...OFFER, requirements: ["a".repeat(200)] }), true);
   assert.equal(isServiceOffer({ ...OFFER, requirements: ["a".repeat(201)] }), false);
+});
+
+test("says what is wrong, not what the shape should have been", () => {
+  // The person edits these terms in the browser, so a refusal is theirs to fix.
+  // A model that writes a term four characters too long produced exactly this,
+  // and "a provider needs service {summary, priceUsdc, requirements[]}" does
+  // not tell anyone which term or by how much.
+  assert.match(
+    serviceOfferProblem({ ...OFFER, requirements: ["ok", "x".repeat(204)] }) ?? "",
+    /term 2 is 204 characters/,
+  );
+  assert.match(
+    serviceOfferProblem({ ...OFFER, requirements: ["ok", "  "] }) ?? "",
+    /term 2 is blank/,
+  );
+  assert.match(serviceOfferProblem({ ...OFFER, summary: "" }) ?? "", /summary/);
+  assert.match(serviceOfferProblem({ ...OFFER, priceUsdc: "ten" }) ?? "", /price/);
+  assert.equal(serviceOfferProblem(OFFER), null);
 });
 
 test("rejects an empty summary", () => {

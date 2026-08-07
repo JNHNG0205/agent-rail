@@ -92,9 +92,15 @@ async function postChat(
   });
 
   let lastError = "";
-  // One retry: transient 429/5xx and network blips are common on a shared key.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (attempt > 0) await sleep(1000);
+  // Four attempts, backing off. Two was set against transient 429s and network
+  // blips, which usually clear on the next try. It is not enough for the other
+  // failure seen here: a 200 whose content is simply empty. OpenRouter routes a
+  // model across several upstream providers, so one that answers this way is
+  // retried onto a different one — but a quarter of measured calls failed at two
+  // attempts a second apart, and each of those is an agent that could not be
+  // created or a funded job that had to wait for the timeout.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) await sleep(500 * 2 ** (attempt - 1));
     try {
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
@@ -119,7 +125,7 @@ async function postChat(
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
-  throw new Error(`LLM request failed after 2 attempts: ${lastError}`);
+  throw new Error(`LLM request failed after 4 attempts: ${lastError}`);
 }
 
 export async function complete(req: CompletionRequest): Promise<string> {
