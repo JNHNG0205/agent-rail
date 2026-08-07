@@ -12,14 +12,14 @@ work that meets the terms" is enforced rather than promised:
 
 - The seller's terms are **published before hiring**, so what is judged cannot
   drift from what was advertised.
-- **Nobody approves their own payment** — `EvaluatorModule` recovers the signer
-  and compares it to the job's evaluator.
+- **Nobody approves their own payment** — `settle` is reachable only through
+  `EvaluatorModule`, which recovers the signer and compares it to the job's
+  evaluator.
+- **The evaluator cannot be handed different work than it graded** — the
+  approval carries the hash it judged, and the module reverts unless it matches
+  what the provider committed on chain.
 - **A silent evaluator cannot withhold a fee for ever** — past the deadline the
   provider calls `claimTimeout` and takes the payment itself.
-
-Agents are not hardcoded. Users create them: a provider publishes what it sells,
-its price, the form it delivers in (`svg`, `markdown` or `text`) and the
-requirements it will be graded against. The only fixed role is the evaluator.
 
 Implements [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) (Trustless
 Agents — identity + reputation) and [ERC-8183](https://eips.ethereum.org/EIPS/eip-8183)
@@ -28,7 +28,49 @@ an evaluator). Identity here is **soulbound**, unlike ERC-8004's transferable
 token, so reputation cannot be sold.
 
 **Stack:** Solidity + Hardhat · Next.js (App Router) · PostgreSQL · Ponder · viem
-· Privy · ERC-4337 smart accounts
+· Privy · ERC-4337 smart accounts · OpenRouter
+
+## What it does
+
+**A marketplace, not a fixed pipeline.** Nothing about the work is hardcoded.
+Users create provider agents; each publishes what it sells, its price, the form
+it delivers in (`svg`, `markdown`, `html` or `text`) and the requirements it will
+be graded against. A client agent reads that directory and picks a counterparty
+whose service actually covers the request — declining plainly when nobody sells
+what is being asked for, rather than commissioning work that cannot be delivered.
+The only fixed role is the evaluator.
+
+**Agents are bought, and choose a brain.** Creating a provider costs 5 USDC for
+Gemini 2.5 Flash Lite or 10 for DeepSeek V4 Flash, paid from your own wallet and
+signed by you. The choice is stored on the agent and is the model its work is
+sent to, so the fee buys something rather than being a toll. The money goes to
+the treasury, which is the account that funds every new agent's first gas.
+
+Because the browser signs that payment, the runtime does not take its word for
+it: the transaction is read back off the chain and checked for the right token,
+the right recipient, at least the right amount, from an address the caller has
+proved they hold, and a hash never used before.
+
+**Terms are proposed, not decided.** A provider's requirements are written from
+its plain-language purpose and then shown for editing, because they are published
+once and applied unchanged to every job that agent ever takes. A term naming one
+buyer's choice — "uses the colour red", when the buyer picks the colours —
+refunds the next buyer who wants something else.
+
+**Agents own their accounts.** Every agent is an ERC-4337 smart account that pays
+its own gas, so a person needs no wallet to commission work. The evaluator stays
+a plain EOA, because `EvaluatorModule` verifies with `ECDSA.recover` and a smart
+account has no key to recover.
+
+**The verdict comes with reasons.** The evaluator writes a sentence explaining
+why a delivery met its terms or did not, and which terms it could not find. The
+chain settles on a signature and records neither, so that reasoning is kept off
+chain and shown alongside each ruling.
+
+**Three tabs, all yours** — Assistant, Dashboard, Marketplace. The network-wide
+views (every job on the shared contracts, every verdict, and how the contracts
+are wired) live off the navigation at `/admin`, behind an administrator account
+stored in the database.
 
 ## Monorepo layout
 
@@ -36,8 +78,8 @@ token, so reputation cannot be sold.
 packages/
   contracts/   JobContract, EvaluatorModule, IdentityRegistry,
                ReputationRegistry, MockUSDC · deploy + seed · tests
-  shared/      ABIs, deployed addresses, shared types + constants
-  web/         Next.js app, API routes, Privy sign-in
+  shared/      ABIs, deployed addresses, shared types, the model catalogue
+  web/         Next.js app, API routes, Privy sign-in, admin
   agents/      runtime/  hosts every agent a user creates
                provider/ does the work a provider was hired for
                agent-c/  the independent evaluator
@@ -45,59 +87,56 @@ packages/
 scripts/       dev.sh (boot everything), demo-reset.sh, preflight.ts
 ```
 
-Full design, and the reasoning behind it, in
-[`agentrail-architecture.md`](./agentrail-architecture.md).
-
 ## Quickstart
 
 Prerequisites: Node 20+, Docker (for Postgres).
 
+**Setup is documented step by step in [`documentation.md`](./documentation.md)** —
+it covers the accounts, the keys and the faucets, and is the one to follow.
+
 ```bash
-npm install                       # installs every workspace
-cp .env.example .env              # only needed for Base Sepolia
+npm install                            # every workspace, from the root
+npm run db:up                          # Postgres in Docker
+cp .env.example .env
 cp packages/agents/.env.example        packages/agents/.env
 cp packages/indexer/.env.local.example packages/indexer/.env.local
 cp packages/web/.env.example           packages/web/.env
 
-npm run db:up                     # Postgres in Docker
-npm run dev                       # everything, on a local chain
+npm run accounts:new                   # evaluator + treasury keys, ready to paste
+npm run preflight:base-sepolia         # deployed? funded? registered?
+npm run dev:base-sepolia               # the whole stack
 ```
 
-`npm run dev` starts Postgres, a Hardhat node, deploys, seeds, then runs the
-indexer, the agent runtime, the evaluator and the web app. Ctrl-C stops all of
-it. Open <http://localhost:3000> and talk to your assistant.
+Then open <http://localhost:3000>.
 
-No API keys are needed to run locally — `LLM_PROVIDER=mock` makes a fresh clone
-work offline, and the schema is created for you (Ponder owns its own tables).
+**It runs against Base Sepolia, where the contracts are already deployed** —
+nothing needs deploying. There is a local Hardhat path (`npm run dev`), but a
+marketplace cannot get far on it: an agent's first user operation is funded by
+the treasury, and that path only runs on testnet.
 
-### Against the deployed testnet
-
-```bash
-npm run dev:base-sepolia
-```
-
-Checks the deployed contracts, registrations and balances first and refuses to
-start if anything is wrong. Needs `BASE_SEPOLIA_RPC_URL` and the testnet keys in
-`.env` and `packages/agents/.env`.
+A new installation has no hosted agents, so create a provider from the
+Marketplace before asking your assistant for anything — an assistant with nobody
+to hire will say so rather than invent a counterparty.
 
 ## Individually
 
 ```bash
-npm run chain          # local Hardhat node at :8545
-npm run deploy         # deploy, and write shared/src/deployments.ts
-npm run seed           # register the seed agents, mint MockUSDC
-npm run indexer        # Ponder event indexer
-npm run runtime        # agent runtime: directory, chat, hire, provider workers
-npm run agent:c        # the evaluator
-npm run web            # Next.js at :3000
-npm test               # every workspace's tests
-npm run compile        # contracts, and regenerate shared/src/abis
+npm run indexer:base-sepolia   # Ponder event indexer
+npm run runtime:base-sepolia   # directory, chat, hire, provider workers
+npm run agent:c:base-sepolia   # the evaluator
+npm run web                    # Next.js at :3000
+
+npm run accounts:new           # generate the testnet accounts
+npm run admin:create -- <email> <password>   # the /admin account
+npm run preflight:base-sepolia # contracts deployed? agents funded?
+npm test                       # every workspace's tests
+npm run compile                # contracts, and regenerate shared/src/abis
 ```
 
-Each has a `:base-sepolia` variant that sets `CHAIN_ID`. An agent started by hand
-reads `packages/agents/.env`, so use the matching variant or it talks to the
-wrong chain — and the failure looks like a chain problem rather than the wrong
-chain.
+`dev.sh` runs the web app in the foreground and the rest behind it, checking each
+only as it starts — so a service that dies later dies quietly, and the symptom
+shows up somewhere else entirely. A stopped evaluator looks like jobs that reach
+`Submitted` and never settle.
 
 ## Environment files
 
@@ -114,6 +153,9 @@ ignored, which looks exactly like it having no effect.
 `NEXT_PUBLIC_*` is inlined into the browser bundle, so those hold **public
 endpoints only** — a private RPC URL there publishes its key to every visitor.
 
+The administrator account is not in any of them: it is a row in Postgres, created
+with `npm run admin:create`.
+
 ## Deployed on Base Sepolia
 
 | Contract | Address |
@@ -124,14 +166,24 @@ endpoints only** — a private RPC URL there publishes its key to every visitor.
 | EvaluatorModule | [`0x3746212a…`](https://sepolia.basescan.org/address/0x3746212a4cbd9dac7e17353b5d9fb6f4249b6098) |
 | MockUSDC | [`0xed0d926e…`](https://sepolia.basescan.org/address/0xed0d926e3b804cf3cbbc497a04e2e7a0669c4da1) |
 
-All five are verified on Basescan and Blockscout.
+All five are verified on Basescan and Blockscout. USDC is a mock so the demo can
+be repeated: `mint` is unrestricted, which is the faucet here and would be a
+critical flaw on a real network. The 6 decimals are real, and every amount in
+this codebase is an integer in minor units.
 
 ## Reset to a clean demo state
 
 ```bash
-npm run demo:reset            # add `base-sepolia` for the testnet
+npm run demo:reset base-sepolia
 ```
 
 Testnet state never resets — job ids only climb, and identity tokens are
 soulbound — so write demo narration that reads the job id at runtime rather than
 naming one.
+
+`npm run db:reset` destroys the agent records **and their private keys**, which
+are the only copies. To clear only the indexed history, drop Ponder's schema:
+
+```bash
+psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
