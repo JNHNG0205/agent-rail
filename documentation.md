@@ -113,7 +113,8 @@ npm run accounts:new
 
 It prints accounts and the exact lines to paste. **Two matter:**
 
-- **Agent C** — the evaluator, which signs every verdict
+- **Evaluator** — signs every verdict. `accounts:new` still labels this one
+  "Agent C", which is the same account under its older name.
 - **Treasury** — pays each new agent's first gas
 
 Paste the lines it shows under *"Paste into packages/agents/.env"* into
@@ -223,7 +224,7 @@ run the services separately.
 
 | Account | Required | Role |
 |---|---|---|
-| **Agent C** | yes | The evaluator. Signs the verdict that settles or refunds. |
+| **Evaluator** | yes | Signs the verdict that settles or refunds. |
 | **Treasury** | yes | Pays each new agent's first gas. |
 | Deployer | no | Only to deploy your own contracts (section 4.4) |
 | Agent A, Agent B | no | Seed agents from the design that preceded the marketplace |
@@ -588,68 +589,11 @@ Everything below is the backend. The person appears only twice — to say what t
 want, and to approve the commission — and after that the agents transact with
 each other.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Person
-    participant Web as Web · /api
-    participant Asst as Assistant agent<br/>(runtime)
-    participant PG as PostgreSQL
-    participant Job as JobContract
-    participant Prov as Provider agent<br/>(runtime worker)
-    participant C as Agent C<br/>(separate process)
-    participant Mod as EvaluatorModule
-    participant Idx as Indexer
-
-    Person->>Web: describes what they want
-    Web->>Asst: POST /agents/:id/chat
-    Note over Asst: reads the directory; the model picks a<br/>provider whose service covers the request,<br/>or declines rather than guessing
-    Asst-->>Web: brief + providerId
-    Web-->>Person: brief, price and published terms
-
-    Person->>Web: commission it
-    Web->>Asst: POST /agents/:id/hire
-
-    Asst->>Job: createJob(provider, evaluator, amount)
-    Job-->>Asst: JobCreated(jobId)
-    Note over Asst: sent alone, because its jobId keys<br/>everything after it
-    Asst->>PG: store the brief — runtime.job_work
-    Note over Asst,PG: stored BEFORE funding: JobFunded wakes the<br/>worker, which has nothing to build without it
-    Asst->>Job: approve + fundJob — one user operation
-
-    Job--)Prov: JobFunded
-    Prov->>PG: read the brief
-    Note over Prov: the model produces the work in the<br/>form this provider declared it sells
-    Prov->>PG: store the deliverable
-    Prov->>Job: submitDeliverable(jobId, keccak256(work))
-
-    Job--)C: DeliverableSubmitted
-    Note over C: acts only where it is the assigned evaluator
-    C->>Prov: GET /commission/:jobId
-    C->>Prov: GET /deliverable/:jobId
-    Note over C: re-derives keccak256 and refuses a<br/>mismatch before spending a token on judging
-    Note over C: grades against the terms the seller<br/>published in advance, and signs the verdict
-    C->>Mod: submitApproval(jobId, hash, approved, signature)
-    Note over Mod: ECDSA.recover(signature) must equal<br/>job.evaluator, and the hash must match
-
-    alt approved
-        Mod->>Job: settle — escrow to the provider
-    else rejected
-        Mod->>Job: cancel — escrow back to the client
-    end
-
-    opt evaluator silent past the deadline
-        Prov->>Job: claimTimeout — the provider takes the fee
-    end
-
-    Job--)Idx: every event
-    Idx->>PG: upsert into the public schema
-    Web->>PG: reads indexed history for the interface
-```
+![Sequence diagram of one AgentRail job, from the request through escrow to settlement](public/images/sequence_diagram.png)
 
 Three things in that sequence are the whole argument.
 
-**The client never grades its own job.** Agent C runs as its own process on its own
+**The client never grades its own job.** The evaluator runs as its own process on its own
 key, and `settle` is reachable only through `EvaluatorModule`.
 
 **The evaluator cannot be lied to about what it judged.** It re-derives the hash
