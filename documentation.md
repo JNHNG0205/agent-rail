@@ -113,8 +113,7 @@ npm run accounts:new
 
 It prints accounts and the exact lines to paste. **Two matter:**
 
-- **Evaluator** — signs every verdict. `accounts:new` still labels this one
-  "Agent C", which is the same account under its older name.
+- **Evaluator** — signs every verdict
 - **Treasury** — pays each new agent's first gas
 
 Paste the lines it shows under *"Paste into packages/agents/.env"* into
@@ -202,7 +201,7 @@ lists before going on — it is far cheaper than discovering a problem mid-demo.
 Expect something like:
 
 ```
-[preflight] Agent C (evaluator)  0.0500 ETH   1000 USDC   registered=true
+[preflight] Evaluator            0.0500 ETH   1000 USDC      registered=true
 [preflight] Treasury             0.0500 ETH   funds 12 more agent(s)
 [preflight] ready.
 ```

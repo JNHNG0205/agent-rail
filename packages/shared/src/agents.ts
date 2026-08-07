@@ -18,13 +18,13 @@ export const AGENT_LABELS: Record<string, string> = {
   "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266": "Deployer",
   "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": "Agent A (client)",
   "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc": "Agent B (provider)",
-  "0x90f79bf6eb2c4f870365e785982e1f101e93b906": "Agent C (evaluator)",
+  "0x90f79bf6eb2c4f870365e785982e1f101e93b906": "Evaluator",
   // Base Sepolia. Different keypairs by necessity — the Hardhat keys above are
   // published, so funding them on a public chain loses the funds immediately.
   "0x75b4f705b722103b4d4d86c7e5c43433b22440f6": "Deployer",
   "0xb53a6b981f553805d3744e230f6a5668dea2b924": "Agent A (client)",
   "0xbe88cfe6027a2ed82c9e555c19cc40a0bd0942c8": "Agent B (provider)",
-  "0x9031059af8d2141a811f5dabcf28ccce89f34863": "Agent C (evaluator)",
+  "0x9031059af8d2141a811f5dabcf28ccce89f34863": "Evaluator",
 };
 
 /// Display name for an agent address, falling back to a truncated address.

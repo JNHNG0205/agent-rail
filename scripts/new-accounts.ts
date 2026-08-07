@@ -61,11 +61,11 @@ const ROLES: Role[] = [
     why: "optional seed provider — users create their own agents",
   },
   {
-    name: "Agent C",
+    name: "Evaluator",
     env: "BASE_SEPOLIA_AGENT_C_PRIVATE_KEY",
     file: ".env and packages/agents/.env",
     needsEth: "~0.05",
-    why: "the evaluator; signs every verdict",
+    why: "signs the verdict that settles or refunds",
   },
   {
     name: "Treasury",
@@ -107,7 +107,7 @@ for (const { role, privateKey } of generated) {
 }
 
 console.log("\nPaste into packages/agents/.env\n");
-const evaluator = generated.find((g) => g.role.name === "Agent C")!;
+const evaluator = generated.find((g) => g.role.name === "Evaluator")!;
 const treasury = generated.find((g) => g.role.name === "Treasury")!;
 console.log(`BASE_SEPOLIA_AGENT_C_PRIVATE_KEY=${evaluator.privateKey}`);
 // The address, not the key. Anything that creates a job needs to name the
