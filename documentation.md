@@ -206,7 +206,18 @@ Expect something like:
 [preflight] ready.
 ```
 
-### Step 10 — Run it
+### Step 10 — Create the administrator (optional)
+
+```bash
+npm run admin:create -- you@example.com 'a good password'
+```
+
+Only needed to open the network views at `/admin` — every job on the shared
+contracts, every verdict, and how the contracts are wired. The ordinary
+application needs none of it. Requires the database from step 2 to be running;
+re-running the command for the same address changes the password.
+
+### Step 11 — Run it
 
 ```bash
 npm run dev:base-sepolia
@@ -257,7 +268,7 @@ fault.
 |---|---|---|
 | Agents you can hire | your database | **nothing** |
 | Your dashboard | your database, your DID | **nothing** |
-| Escrow Jobs | the chain | every job anyone has ever run |
+| All jobs (`/admin`) | the chain | every job anyone has ever run |
 | Registered, not hosted | the chain | every identity ever registered |
 
 That last pair is not a mistake. Identity tokens are soulbound and jobs are
@@ -270,7 +281,7 @@ commissioned.** Signing in creates your assistant automatically, but an
 assistant with nobody to hire will say so rather than invent a counterparty.
 Seeding does not help here: it registers identities on chain and creates no
 hosted agents, so "available to hire" stays empty until you create one from
-**Agents & Registry**.
+**Marketplace**.
 
 ### 3.4 The four environment files
 
@@ -282,7 +293,7 @@ ignored**, which looks identical to it having no effect.
 | `.env` | Hardhat, `preflight.ts` | RPC endpoint, deployer and agent keys |
 | `packages/agents/.env` | runtime, evaluator | chain, RPC, evaluator key **and address**, treasury key, LLM, database |
 | `packages/indexer/.env.local` | Ponder (**not** `.env`) | chain id, database, its own RPC |
-| `packages/web/.env` | Next.js | database, Privy, admin allowlists, public endpoints |
+| `packages/web/.env` | Next.js | database, Privy, public endpoints |
 
 ### 3.5 Why the indexer uses a different endpoint
 
@@ -357,7 +368,7 @@ The contracts are already deployed and their addresses are already in
 own instead, see 4.4.
 
 **Expect the indexer to lag on first start.** It backfills roughly 120,000
-blocks, which takes a few minutes. Escrow Jobs and the event feed fill in behind
+blocks, which takes a few minutes. The job list and the event feed fill in behind
 it — but nothing is blocked, because the Assistant and the job drawer read the
 chain directly. You can commission work immediately.
 
@@ -392,6 +403,7 @@ leaving it to a file you edited some time ago.
 ```bash
 npm run preflight:base-sepolia  # contracts deployed? agents registered and funded?
 npm run accounts:new            # generate the five testnet accounts
+npm run admin:create -- <email> <password>   # create or reset the administrator
 npm test                        # every workspace's tests
 npm run db:reset                # wipe PostgreSQL — see the note below
 npm run demo:reset base-sepolia # kill strays, then start clean
@@ -421,26 +433,33 @@ schema as above — it refuses to reuse one written against different contracts.
 ## 5. Walkthrough
 
 1. Open <http://localhost:3000> and **sign in** with an email or a wallet.
-2. **Agents & Registry → Create provider agent.** Do this first: a new
-   installation has no hosted agents, so there is nobody to hire until you make
-   one (section 3.3). Describe in plain language what it sells. The system
-   proposes a price, a delivery format and the terms it will be graded against.
-   **Edit them before confirming** — every field there is editable, and this is
-   the last chance: registration is soulbound and cannot be undone, the terms
+2. **Dashboard → Withdraw** a little USDC from your assistant to your own
+   wallet. Creating an agent is paid for from that wallet, and a wallet that has
+   never withdrawn holds nothing — test USDC is granted to assistants, not to
+   people. 10 USDC covers either model.
+3. **Marketplace → Create provider agent.** Do this before anything else can be
+   commissioned: a new installation has no hosted agents, so there is nobody to
+   hire until you make one (section 3.3). Describe in plain language what it
+   sells. The system proposes a price, a delivery format and the terms it will be
+   graded against, and you choose the model it thinks with — 5 USDC for Gemini
+   2.5 Flash Lite, 10 for DeepSeek V4 Flash (section 6.6).
+   **Edit the terms before confirming** — every field there is editable, and this
+   is the last chance: registration is soulbound and cannot be undone, the terms
    apply to every job this agent ever takes, and terms that cannot be checked by
-   reading the delivered work make the escrow settle at random.
-3. **Assistant.** Ask for something the marketplace covers. Your agent asks for
+   reading the delivered work make the escrow settle at random. Confirming asks
+   your wallet to sign the fee before the agent is created.
+4. **Assistant.** Ask for something the marketplace covers. Your agent asks for
    anything genuinely missing, chooses a provider whose service fits, and shows
    you the brief and the terms before committing anything.
-4. **Commission it.** The job moves Open → Funded → Submitted → Terminal. The
+5. **Commission it.** The job moves Open → Funded → Submitted → Terminal. The
    provider produces the work and commits its hash; the evaluator fetches it,
    re-derives the hash, grades it against the published terms and signs the
    decision that settles or refunds.
-5. **Collect the result** — preview, download, or copy it.
-6. **Dashboard → Withdraw** to move an agent's earnings to your own wallet, or
+6. **Collect the result** — preview, download, or copy it.
+7. **Dashboard → Withdraw** to move an agent's earnings to your own wallet, or
    **Deposit** to fund an agent from it.
-7. **Escrow Jobs** shows every job, its state and the work delivered.
-   **Evaluator Suite** shows each verdict and what it was graded against.
+8. **`/admin`** — not in the navigation — shows every job on the network and
+   why each one paid out. Sign in with the administrator account (section 6.8).
 
 A full cycle takes roughly one to two minutes, most of it waiting on the model
 and on block confirmations.
@@ -858,6 +877,7 @@ to it through its own API routes, behind a shared secret.
 | `GET /agents/:id/balance` | what an agent holds |
 | `POST /agents/:id/withdraw` | send its earnings to a verified wallet |
 | `POST /wallet/gas` | gas for a user's first deposit |
+| `GET /treasury` | where a creation fee is paid to |
 
 Its parts: `store` (agent records, keys, ownership), `chat` (conversation to
 brief), `offer` (purpose to gradeable terms), `hire` (createJob → approve →
@@ -909,17 +929,25 @@ refunded and timed-out into one state; the indexer keeps them apart as
 
 It reads from the public RPC endpoint, separately from the agents (section 3.5).
 
-### 7.7 PostgreSQL, in two schemas
+### 7.7 PostgreSQL, in three schemas
 
 | Schema | Owner | Contents | Survives a reset |
 |---|---|---|---|
 | `public` | Ponder | indexed chain history | no — rebuilt from the chain |
-| `runtime` | the agent runtime | agent records, **private keys**, briefs, deliverables | must |
+| `runtime` | the agent runtime | agent records, **private keys**, briefs, deliverables, verdict reasoning, creation fees | must |
+| `app` | the web application | the administrator account | must |
 
 The split is load-bearing. Ponder drops and rebuilds its schema on a
 configuration change. An identity token is soulbound, so an agent's address is
 permanent and losing its key orphans that registration forever — sharing one
-schema would destroy agents as a side effect of reindexing.
+schema would destroy agents as a side effect of reindexing. The administrator is
+in a third schema for the same reason: it belongs to neither of the others, and
+putting it in `public` would delete it on the next reindex.
+
+`runtime.agent_payment` records the transaction that paid for each agent, keyed
+on the hash. That key is what stops one receipt creating unlimited agents, and it
+is a database constraint rather than a check in code because two requests
+arriving together would both pass a check.
 
 `runtime.job_work` holds each brief and deliverable because the chain stores
 only a hash. Losing a deliverable does not fail a job — settlement runs on the
@@ -993,6 +1021,21 @@ terms are editable and validated: each must be non-blank, under 200 characters,
 and there may be at most six. The message names the term and the problem — a
 model occasionally writes one long enough to be refused. Shorten it in the dialog
 and confirm again.
+
+**Creating an agent says your wallet is short of the fee.** Test USDC is
+granted to assistants, not to people, so a wallet that has never withdrawn holds
+nothing. Dashboard → Withdraw a little from your assistant first; 10 USDC covers
+either model.
+
+**Creating an agent is refused with "that payment is not visible on chain yet".**
+The fee transaction has not been mined where the runtime can see it. Usually it
+resolves in a few seconds — try again with the same details, and note that the
+receipt is not consumed by a failed attempt, so you will not be charged twice.
+
+**`/admin` refuses the password you just set.** The administrator lives in the
+database, so the command must have run against the same one the web app reads —
+both use `DATABASE_URL` from their own env file. If no account exists at all the
+page says so; a wrong password says only that it did not match.
 
 **An agent was created but never appears in the directory.** Its onboarding did
 not finish — usually the treasury ran out of ETH, or the RPC endpoint refused
