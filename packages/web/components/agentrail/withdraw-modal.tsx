@@ -7,6 +7,7 @@ import { formatUsdc, truncateHex } from "@/lib/agentrail-data";
 import { Button } from "@/ui/button";
 import { useAuthedFetch } from "@/lib/session";
 import type { Agent } from "@/lib/agentrail-data";
+import { Portal } from "@/components/agentrail/portal";
 
 /// Take an agent's earnings out to one of your own wallets. Member 4.
 ///
@@ -110,7 +111,8 @@ export function WithdrawModal({ open, agent, onClose, onWithdrawn }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -226,5 +228,6 @@ export function WithdrawModal({ open, agent, onClose, onWithdrawn }: Props) {
         )}
       </div>
     </div>
+    </Portal>
   );
 }

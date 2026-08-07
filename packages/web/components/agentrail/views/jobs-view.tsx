@@ -17,6 +17,7 @@ import { CopyButton } from '@/components/agentrail/copy-button'
 import { StatePill } from '@/components/agentrail/state-pill'
 import { statusOf, STATUS_KEYS, statusByKey, type JobOutcome, type StatusKey } from '@/lib/status'
 import { cn } from '@/lib/utils'
+import { Portal } from '@/components/agentrail/portal'
 
 const FILTERS: (StatusKey | 'All')[] = ['All', ...STATUS_KEYS]
 
@@ -73,7 +74,8 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
   }, [onClose])
 
   return (
-    <div
+    <Portal>
+      <div
       className="fixed inset-0 z-50"
       role="dialog"
       aria-modal="true"
@@ -221,7 +223,8 @@ function JobDrawer({ job, onClose }: { job: JobRow; onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Portal>
   )
 }
 

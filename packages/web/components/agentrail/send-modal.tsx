@@ -9,6 +9,7 @@ import { Button } from "@/ui/button";
 import { useSendUsdc } from "@/hooks/useSendUsdc";
 import { useSession } from "@/lib/session";
 import { readUsdcBalance } from "@/lib/contracts";
+import { Portal } from "@/components/agentrail/portal";
 
 /// Send USDC from your wallet to any address. Member 4.
 ///
@@ -92,7 +93,8 @@ export function SendModal({ open, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -236,5 +238,6 @@ export function SendModal({ open, onClose }: Props) {
         )}
       </div>
     </div>
+    </Portal>
   );
 }

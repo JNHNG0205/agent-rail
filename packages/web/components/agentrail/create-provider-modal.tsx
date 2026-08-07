@@ -6,6 +6,7 @@ import { Loader2, Plus, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/ui/button";
 import { useAuthedFetch, useSession } from "@/lib/session";
 import { useCreationFee } from "@/hooks/useCreationFee";
+import { Portal } from "@/components/agentrail/portal";
 
 /// Create a provider agent — one that sells a service to other agents. Member 4.
 ///
@@ -134,7 +135,8 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
   const shortfall = fee.balance !== null && fee.balance < price;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto sheet rounded-2xl p-6">
         <h2 className="text-lg font-medium">Create a provider agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -372,5 +374,6 @@ export function CreateProviderModal({ open, onClose, onCreated }: Props) {
         )}
       </div>
     </div>
+    </Portal>
   );
 }

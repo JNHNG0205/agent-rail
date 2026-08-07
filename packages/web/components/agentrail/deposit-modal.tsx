@@ -9,6 +9,7 @@ import { useSendUsdc } from "@/hooks/useSendUsdc";
 import { useSession } from "@/lib/session";
 import { readUsdcBalance } from "@/lib/contracts";
 import type { Agent } from "@/lib/agentrail-data";
+import { Portal } from "@/components/agentrail/portal";
 
 /// Send your own USDC to one of your agents. Member 4.
 ///
@@ -95,7 +96,8 @@ export function DepositModal({ open, agent, onClose, onDeposited }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -198,5 +200,6 @@ export function DepositModal({ open, agent, onClose, onDeposited }: Props) {
         )}
       </div>
     </div>
+    </Portal>
   );
 }
