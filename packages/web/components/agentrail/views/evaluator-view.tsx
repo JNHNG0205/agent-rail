@@ -56,7 +56,10 @@ const VERDICT_META: Record<Verdict, { label: string; tone: string; icon: React.R
 
 export function EvaluatorView() {
   const { jobs, loading } = useJobs();
-  const { byJob: reviews } = useReviews();
+  // Any change to a job's state may mean a new ruling was just written.
+  const { byJob: reviews } = useReviews(
+    jobs.map((j) => `${j.id}:${j.state}`).join(","),
+  );
 
   // Submitted or Terminal: everything the evaluator has ruled on, plus what is
   // waiting on it.
@@ -157,15 +160,17 @@ export function EvaluatorView() {
                 </div>
               )}
 
-              {/* A ruling made on somebody else's machine is not missing, it was
-                  never written here: the reasoning is recorded by whichever
-                  evaluator judged the job, and the chain carries the verdict
-                  rather than the sentence explaining it. */}
+              {/* Says what is known, not a guess at why. This claimed the job
+                  had been judged elsewhere, which was wrong for a job the
+                  reader had just run themselves — the reasoning was recorded,
+                  and the page was showing a fetch made before it existed. */}
               {job.state === 3 && !reviews.get(String(job.id)) && (
                 <p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">
-                  Decided by an evaluator running elsewhere, so its reasoning was
-                  never recorded here. The chain carries the verdict and the
-                  signature behind it, not the sentence that explains it.
+                  No reasoning was recorded for this job. It was either judged
+                  before this was kept, or judged by an evaluator on another
+                  machine — the sentence is stored by whichever evaluator made the
+                  call, while the chain carries only the verdict and the signature
+                  behind it.
                 </p>
               )}
 

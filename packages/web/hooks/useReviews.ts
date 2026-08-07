@@ -21,7 +21,11 @@ export interface Review {
   missing: string[];
 }
 
-export function useReviews(limit = 200) {
+/// `signal` is any value that changes when the set of judged jobs might have.
+/// Rulings are written by a separate process while this page is open, and a
+/// fetch on mount alone meant a job settling in front of somebody kept showing
+/// "no reasoning recorded" until they reloaded — which is how this was found.
+export function useReviews(signal?: string, limit = 200) {
   const [byJob, setByJob] = useState<Map<string, Review>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +47,7 @@ export function useReviews(limit = 200) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, signal]);
 
   return { byJob, loading, error, refetch: load };
 }
