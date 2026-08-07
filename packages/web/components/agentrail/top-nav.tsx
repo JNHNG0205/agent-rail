@@ -97,13 +97,13 @@ export function TopNav({
   }
 
   return (
-    <header className="masthead-in sticky top-0 z-30 border-b border-rail/15 bg-rail text-rail-foreground shadow-[0_1px_0_rgba(11,29,26,0.06),0_10px_30px_-24px_rgba(11,29,26,0.8)]">
+    <header className="masthead-in sticky top-0 z-30 border-b border-rail/15 bg-rail text-rail-foreground shadow-[0_1px_0_rgba(12,17,22,0.06),0_10px_30px_-24px_rgba(12,17,22,0.8)]">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Top row: logo + chain + wallet/create */}
         <div className="flex h-16 items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(220,75,46,0.55)]">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_2px_10px_-2px_rgba(37,99,235,0.55)]">
                 <Layers className="size-5" aria-hidden="true" />
               </div>
               <span className="font-display text-lg font-semibold tracking-tight text-rail-foreground">
@@ -149,7 +149,7 @@ export function TopNav({
 
                 {/* Wallet Dropdown Popover */}
                 {dropdownOpen && (
-                  <div className="sheet absolute right-0 z-50 mt-2 w-64 p-3 text-foreground shadow-[0_18px_40px_-16px_rgba(11,29,26,0.45)]">
+                  <div className="sheet absolute right-0 z-50 mt-2 w-64 p-3 text-foreground shadow-[0_18px_40px_-16px_rgba(12,17,22,0.45)]">
                     <div className="border-b border-border/80 pb-2.5 mb-2.5">
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
                         {connectedAddress ? 'Connected Account' : 'Signed In'}

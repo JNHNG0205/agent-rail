@@ -10,42 +10,52 @@
  * is not decoration, it is the one thing a person is here to read, and a
  * dashboard that tints its cards for pleasure has nothing left to say it with.
  *
- * The neutral is chosen rather than inherited: porcelain carries the same green
- * bias as the ink, so the two read as one family instead of grey-by-default.
+ * The neutral is chosen rather than inherited: the porcelain carries the same
+ * blue bias as the ink, so the two read as one family instead of grey-by-default.
+ *
+ * The brand was a deep pine green with a vermilion accent, which is a warm
+ * organic pairing and read as a school or a garden centre rather than as payment
+ * infrastructure. Graphite and electric blue is the plainer reading of the
+ * subject. The state hues are untouched by that change, because they mean
+ * something and the brand does not.
  */
 
 :root {
   color-scheme: light;
 
   /* Ground and ink */
-  --paper: #edf0ee;
-  --paper-raised: #f6f8f6;
-  --background: #edf0ee;
-  --foreground: #0b1d1a;
+  --paper: #edeff3;
+  --paper-raised: #f7f8fa;
+  --background: #edeff3;
+  --foreground: #0c1116;
   --card: #ffffff;
-  --card-foreground: #0b1d1a;
+  --card-foreground: #0c1116;
   --popover: #ffffff;
-  --popover-foreground: #0b1d1a;
-  --muted: #e4e9e6;
-  --muted-foreground: #5a6b66;
-  --secondary: #e4e9e6;
-  --secondary-foreground: #0b1d1a;
-  --accent: #dde4e0;
-  --accent-foreground: #0b1d1a;
-  --border: #d7ded9;
-  --input: #c9d3cd;
+  --popover-foreground: #0c1116;
+  --muted: #e3e6ec;
+  --muted-foreground: #59616e;
+  --secondary: #e3e6ec;
+  --secondary-foreground: #0c1116;
+  --accent: #dbe0e9;
+  --accent-foreground: #0c1116;
+  --border: #d5dae2;
+  --input: #c4ccd8;
 
   /* The dominant field — masthead, and anything that should read as the system
    * itself speaking rather than a surface a person edits. */
-  --rail: #0a2e2b;
-  --rail-2: #103f3a;
-  --rail-foreground: #eaf2ef;
+  --rail: #12161c;
+  --rail-2: #1b2129;
+  --rail-foreground: #e9edf3;
 
   /* The single sharp accent. Primary action, the active tab, the focus ring —
-   * and nothing else, so that seeing it always means "this is the way on". */
-  --primary: #dc4b2e;
+   * and nothing else, so that seeing it always means "this is the way on".
+   *
+   * Blue rather than any warm hue because the six state colours already occupy
+   * green, amber, teal, maroon and violet, and an accent sharing a hue with a
+   * status would make the status ambiguous. */
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --ring: #dc4b2e;
+  --ring: #2563eb;
 
   /* State. Six hues because there are six things that can be true of a job, and
    * a person scanning a list reads the colour before the word. */
@@ -71,7 +81,7 @@
   --destructive: #96304a;
   --destructive-foreground: #ffffff;
 
-  --chart-1: #0a2e2b;
+  --chart-1: #12161c;
   --chart-2: #1b7a4b;
   --chart-3: #9a6b05;
   --chart-4: #0e6e7d;
@@ -79,13 +89,13 @@
 
   --radius: 0.7rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0b1d1a;
-  --sidebar-primary: #dc4b2e;
+  --sidebar-foreground: #0c1116;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e4e9e6;
-  --sidebar-accent-foreground: #0b1d1a;
-  --sidebar-border: #d7ded9;
-  --sidebar-ring: #dc4b2e;
+  --sidebar-accent: #e3e6ec;
+  --sidebar-accent-foreground: #0c1116;
+  --sidebar-border: #d5dae2;
+  --sidebar-ring: #2563eb;
 }
 
 @layer base {
@@ -108,8 +118,8 @@
     background-color: transparent;
     background-attachment: fixed;
     background-image:
-      radial-gradient(72rem 40rem at 8% -14%, rgba(16, 63, 58, 0.08), transparent 58%),
-      radial-gradient(52rem 34rem at 106% 0%, rgba(220, 75, 46, 0.045), transparent 55%);
+      radial-gradient(72rem 40rem at 8% -14%, rgba(18, 22, 28, 0.07), transparent 58%),
+      radial-gradient(52rem 34rem at 106% 0%, rgba(37, 99, 235, 0.05), transparent 55%);
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
 
@@ -129,7 +139,7 @@
   }
 
   ::selection {
-    background: rgba(220, 75, 46, 0.18);
+    background: rgba(37, 99, 235, 0.16);
   }
 }
 
@@ -154,8 +164,8 @@
   .sheet {
     @apply rounded-xl border border-border bg-card;
     box-shadow:
-      0 1px 1px rgba(11, 29, 26, 0.04),
-      0 6px 18px -12px rgba(11, 29, 26, 0.22);
+      0 1px 1px rgba(12, 17, 22, 0.04),
+      0 6px 18px -12px rgba(12, 17, 22, 0.20);
   }
 }
 
