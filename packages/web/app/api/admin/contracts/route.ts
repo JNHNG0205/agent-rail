@@ -3,7 +3,7 @@ import { checkAdmin } from "@/lib/admin";
 import { publicClient } from "@/lib/viem";
 import { addresses, JobContractAbi, CHAIN_ID } from "@agentrail/shared";
 
-/// GET /api/admin/contracts — how the deployed contracts are wired. Superadmin.
+/// GET /api/admin/contracts — how the deployed contracts are wired. Admin only.
 ///
 /// Read from the chain, never from `deployments.ts`, and that is the whole point
 /// of the panel. The file records what was deployed; the contract records what
@@ -33,8 +33,8 @@ async function read(functionName: Getter): Promise<string | null> {
 }
 
 export async function GET(request: Request) {
-  const { role, reason } = await checkAdmin(request);
-  if (role !== "superadmin") {
+  const { admin, reason } = await checkAdmin(request);
+  if (!admin) {
     return NextResponse.json({ error: reason }, { status: 403 });
   }
 

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Briefcase, Lock, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { Briefcase, Lock, LogOut, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { Button } from '@/ui/button'
 import { JobsView } from './jobs-view'
 import { EvaluatorView } from './evaluator-view'
 import { ContractsPanel } from '@/components/agentrail/contracts-panel'
@@ -16,10 +17,13 @@ import { cn } from '@/lib/utils'
 /// the same row as the personal views, they read as though they were the
 /// reader's own.
 ///
-/// Two levels behind it. An admin reads the network views; a superadmin owns the
-/// deployed contracts and additionally sees how they are wired. The check is the
-/// server's — this component asks and renders the answer, and the routes serving
-/// each panel ask the same function again for themselves.
+/// An administrator account from the database, signing in with an email and a
+/// password. The check is the server's — this component asks, renders the
+/// answer and offers the form; the routes serving each panel check the same
+/// cookie again for themselves.
+///
+/// Separate from signing in as a user. Somebody may be both at once, and the
+/// administrator is not a person's agent-owning identity.
 ///
 /// Worth being straight about what the gate is. Jobs and verdicts sit on public
 /// contracts, so anyone willing to read the chain can reconstruct them without
@@ -39,7 +43,18 @@ const PANELS: { id: Panel; label: string; icon: React.ReactNode }[] = [
 
 export function AdminView() {
   const [panel, setPanel] = useState<Panel>('jobs')
-  const { admin, superadmin, reason, checked } = useAdmin()
+  const { admin, reason, checked, signIn, signOut } = useAdmin()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(await signIn(email, password))
+    setBusy(false)
+  }
 
   if (!checked) {
     return <p className="text-sm text-muted-foreground">Checking access…</p>
@@ -50,38 +65,78 @@ export function AdminView() {
   // a browser buys an empty page rather than the data.
   if (!admin) {
     return (
-      <div className="sheet mx-auto max-w-lg rounded-2xl p-8 text-center">
+      <form onSubmit={submit} className="sheet mx-auto max-w-sm rounded-2xl p-7">
         <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
           <Lock className="size-5" aria-hidden="true" />
         </span>
-        <h1 className="mt-4 text-lg font-semibold tracking-tight">Not your dashboard</h1>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-          {reason ?? 'This account may not open the network admin views.'}
+        <h1 className="mt-4 text-center text-lg font-semibold tracking-tight">
+          Administrator sign-in
+        </h1>
+        <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-muted-foreground">
+          These views cover the whole network rather than your own agents. Your
+          own are on the Dashboard, and they need none of this.
         </p>
-        <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-muted-foreground">
-          Access is either the wallet that owns the deployed contracts, or an
-          entry in the server&apos;s admin list. Your own agents and jobs are on
-          the Dashboard, and they need none of this.
-        </p>
-      </div>
+
+        <label className="mt-6 block text-sm">
+          <span className="mb-1.5 block font-medium">Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring"
+          />
+        </label>
+
+        <label className="mt-3 block text-sm">
+          <span className="mb-1.5 block font-medium">Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring"
+          />
+        </label>
+
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+
+        <Button type="submit" className="mt-5 w-full" disabled={busy}>
+          {busy ? 'Signing in…' : 'Sign in'}
+        </Button>
+
+        {/* Shown only when there is no account to sign into, or the database
+            is down. A wrong password gets the failure above and nothing more:
+            telling somebody who mistyped how accounts are made is telling them
+            where to look. */}
+        {reason && !reason.startsWith('sign in') && (
+          <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{reason}</p>
+        )}
+      </form>
     )
   }
 
-  const panels = superadmin ? PANELS : PANELS.filter((p) => p.id !== 'contracts')
-
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           Network admin
         </h1>
         <p className="text-sm text-muted-foreground">
           Everything running on the shared contracts, rather than anything of
-          yours.{' '}
-          {superadmin
-            ? 'You are signed in as the owner of the deployed contracts.'
-            : 'You have read access to the network views.'}
+          yours — every job on the shared contracts, every verdict, and how the
+          contracts are wired.
         </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <LogOut className="size-3.5" aria-hidden="true" />
+          Sign out
+        </button>
       </div>
 
       {/* A tab list, not links: both panels read the same job data, and swapping
@@ -91,7 +146,7 @@ export function AdminView() {
         aria-label="Network views"
         className="inline-flex gap-1 rounded-xl border border-border bg-card p-1"
       >
-        {panels.map((p) => {
+        {PANELS.map((p) => {
           const active = p.id === panel
           return (
             <button
@@ -122,11 +177,9 @@ export function AdminView() {
       <div className={cn(panel === 'verdicts' ? 'block' : 'hidden')}>
         <EvaluatorView />
       </div>
-      {superadmin && (
-        <div className={cn(panel === 'contracts' ? 'block' : 'hidden')}>
-          <ContractsPanel />
-        </div>
-      )}
+      <div className={cn(panel === 'contracts' ? 'block' : 'hidden')}>
+        <ContractsPanel />
+      </div>
     </div>
   )
 }

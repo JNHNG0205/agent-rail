@@ -1,58 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuthedFetch, useSession } from "@/lib/session";
-import type { AdminRole } from "@/lib/admin";
+import { useCallback, useEffect, useState } from "react";
 
-/// Whether this person may open the network admin views. Member 4.
+/// Whether this browser is signed in as the administrator. Member 4.
 ///
-/// Asked of the server every time, and never inferred here. The browser holds no
-/// rule about who is an administrator — it holds an answer, which the routes
-/// serving admin data check again for themselves. Hiding a tab is a courtesy;
-/// the refusal that matters happens where the data is.
+/// Asked of the server and never inferred here. The session is an HttpOnly
+/// cookie, so this hook could not read it even if it wanted to — which is the
+/// arrangement that makes "hide the tab" a courtesy rather than the control.
+/// Every route behind the admin views checks the same cookie for itself.
+///
+/// Deliberately not tied to the Privy session. The administrator is one seeded
+/// account, unrelated to whoever is signed in as a user, and someone may well be
+/// both at once.
 
 export function useAdmin() {
-  const { signedIn } = useSession();
-  const authedFetch = useAuthedFetch();
-  const [role, setRole] = useState<AdminRole>("none");
+  const [admin, setAdmin] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!signedIn) {
-      setRole("none");
-      setReason("sign in to open the network admin views");
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/session");
+      const body = (await res.json()) as { admin?: boolean; reason?: string };
+      setAdmin(body.admin === true);
+      setReason(body.reason ?? null);
+    } catch {
+      setAdmin(false);
+      setReason("could not check admin access");
+    } finally {
       setChecked(true);
-      return;
     }
-    setChecked(false);
-    void authedFetch("/api/admin/session")
-      .then((r) => r.json())
-      .then((body: { role?: AdminRole; reason?: string }) => {
-        if (cancelled) return;
-        setRole(body.role ?? "none");
-        setReason(body.reason ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRole("none");
-          setReason("could not check admin access");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setChecked(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [signedIn, authedFetch]);
+  }, []);
 
-  return {
-    role,
-    admin: role !== "none",
-    superadmin: role === "superadmin",
-    reason,
-    checked,
-  };
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const body = (await res.json()) as { admin?: boolean; error?: string };
+        if (!res.ok || body.error) return body.error ?? "could not sign in";
+        await refresh();
+        return null;
+      } catch {
+        return "could not reach the server";
+      }
+    },
+    [refresh],
+  );
+
+  const signOut = useCallback(async () => {
+    await fetch("/api/admin/logout", { method: "POST" });
+    await refresh();
+  }, [refresh]);
+
+  return { admin, reason, checked, signIn, signOut, refresh };
 }

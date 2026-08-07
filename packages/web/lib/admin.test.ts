@@ -1,99 +1,49 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { hashPassword, passwordMatches, normaliseEmail } from "./admin";
 
-/// Who the admin gate lets through.
+/// How an administrator's password is stored and checked.
 ///
-/// The rules are pure enough to test without a network: which entries count, and
-/// the two cases that must deny rather than allow. The chain lookup and Privy
-/// verification are exercised by the routes; what is checked here is the policy
-/// they hand their answers to.
-///
-/// These mirror `checkAdmin`'s decision table rather than calling it, because
-/// importing it pulls in a viem client and a Privy verifier. That is a real
-/// limitation: a change to checkAdmin that contradicts these would not fail
-/// them. It is why the order below is asserted explicitly — ownership first —
-/// since that is the property most likely to be broken by a refactor.
+/// These are the parts that hold no database: the hash format, the comparison,
+/// and the address normalisation that decides whether two sign-ins are the same
+/// account. Session signing and the lookups around it need Postgres, and are
+/// exercised through the routes instead.
 
-type Role = "none" | "admin" | "superadmin";
+test("a stored password is not the password", () => {
+  const stored = hashPassword("correct horse");
+  assert.ok(!stored.includes("correct horse"), "the plaintext must not survive");
+  assert.match(stored, /^[0-9a-f]{32}:[0-9a-f]{128}$/, "salt and derived key, both hex");
+});
 
-function decide(opts: {
-  privyConfigured: boolean;
-  did: string | null;
-  wallets: string[];
-  contractOwner: string | null;
-  admins: string[];
-  supers: string[];
-}): Role {
-  if (!opts.privyConfigured) return "none";
-  if (!opts.did) return "none";
-  const held = opts.wallets.map((w) => w.toLowerCase());
-  const id = opts.did.toLowerCase();
-  if (opts.contractOwner && held.includes(opts.contractOwner.toLowerCase())) {
-    return "superadmin";
+test("the same password hashes differently every time", () => {
+  // A per-row salt, so two administrators choosing the same password do not
+  // share a hash and the table cannot be scanned for repeats.
+  assert.notEqual(hashPassword("correct horse"), hashPassword("correct horse"));
+});
+
+test("accepts the password it was given, and nothing near it", () => {
+  const stored = hashPassword("correct horse");
+  assert.equal(passwordMatches("correct horse", stored), true);
+  assert.equal(passwordMatches("correct hors", stored), false);
+  assert.equal(passwordMatches("Correct Horse", stored), false, "case matters");
+  assert.equal(passwordMatches("", stored), false);
+});
+
+test("refuses a malformed stored value instead of throwing", () => {
+  // These would mean a corrupted or hand-edited row. Every one of them must deny
+  // rather than crash the sign-in route, and none may accidentally pass.
+  for (const stored of ["", ":", "nosalt", "abc:", ":abc", "zz:zz", "abc:def"]) {
+    assert.equal(passwordMatches("anything", stored), false, JSON.stringify(stored));
   }
-  if (opts.supers.includes(id) || held.some((a) => opts.supers.includes(a))) {
-    return "superadmin";
-  }
-  if (opts.admins.includes(id) || held.some((a) => opts.admins.includes(a))) {
-    return "admin";
-  }
-  return "none";
-}
-
-const BASE = {
-  privyConfigured: true,
-  did: "did:privy:abc",
-  wallets: [] as string[],
-  contractOwner: "0xowner",
-  admins: [] as string[],
-  supers: [] as string[],
-};
-
-test("nobody is an admin by default", () => {
-  // The safe default matters more than the convenient one: an empty allowlist
-  // must mean "only the contract owner", never "everyone".
-  assert.equal(decide(BASE), "none");
 });
 
-test("owning the deployed contracts makes a superadmin, with nothing configured", () => {
-  assert.equal(decide({ ...BASE, wallets: ["0xOWNER"] }), "superadmin");
+test("a derived key of the wrong length never matches", () => {
+  // timingSafeEqual throws on a length mismatch, so this has to be checked
+  // before comparing rather than caught afterwards.
+  const [salt] = hashPassword("correct horse").split(":");
+  assert.equal(passwordMatches("correct horse", `${salt}:${"ab".repeat(8)}`), false);
 });
 
-test("an allowlisted identity is an admin, not a superadmin", () => {
-  // The lists are this application's opinion. Ownership is the chain's, and only
-  // one of those can re-point the registries.
-  assert.equal(decide({ ...BASE, admins: ["did:privy:abc"] }), "admin");
-});
-
-test("ownership outranks the lists", () => {
-  // Listed as a plain admin while also owning the contracts: the higher of the
-  // two wins, because the power is real whatever a file says.
-  assert.equal(
-    decide({ ...BASE, wallets: ["0xowner"], admins: ["did:privy:abc"] }),
-    "superadmin",
-  );
-});
-
-test("a wallet may be listed as well as an identity", () => {
-  assert.equal(decide({ ...BASE, wallets: ["0xabc"], supers: ["0xabc"] }), "superadmin");
-});
-
-test("refuses everyone when identity cannot be verified", () => {
-  // With no Privy app the caller's identity is a header they wrote themselves,
-  // so a listed entry could simply be asserted. Denying is the only safe answer,
-  // and it must beat every other rule including ownership.
-  assert.equal(
-    decide({
-      ...BASE,
-      privyConfigured: false,
-      did: "did:privy:abc",
-      wallets: ["0xowner"],
-      supers: ["did:privy:abc"],
-    }),
-    "none",
-  );
-});
-
-test("refuses a caller with no identity at all", () => {
-  assert.equal(decide({ ...BASE, did: null, wallets: ["0xowner"] }), "none");
+test("an email is one account however it is typed", () => {
+  assert.equal(normaliseEmail("  Admin@Example.COM "), "admin@example.com");
 });

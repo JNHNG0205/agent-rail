@@ -19,7 +19,6 @@ import {
 import { formatUsdc, truncateHex } from '@/lib/agentrail-data'
 import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
 import { useWalletStatus } from '@/hooks/useWalletStatus'
-import { useAdmin } from '@/hooks/useAdmin'
 import { cn } from '@/lib/utils'
 
 export type TabId = 'assistant' | 'dashboard' | 'registry' | 'admin'
@@ -69,10 +68,6 @@ export function TopNav({
   /// looks for the way to spend it.
   onSendUsdc: () => void
 }) {
-  // Hidden rather than shown-and-refused: a tab that always says no is a tab
-  // that teaches people to ignore the navigation. The page behind it refuses on
-  // its own, so this is presentation, not the control.
-  const { admin } = useAdmin()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const walletStatus = useWalletStatus(connectedAddress)
@@ -270,7 +265,7 @@ export function TopNav({
           aria-label="Primary"
           className="-mb-px flex gap-1 overflow-x-auto"
         >
-          {TABS.filter((tab) => tab.id !== 'admin' || admin).map((tab) => {
+          {TABS.map((tab) => {
             const isActive = tab.id === activeTab
             return (
               <button

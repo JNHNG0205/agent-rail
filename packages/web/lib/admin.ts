@@ -1,146 +1,214 @@
-import { appId, ownerOf, verifiedWalletsOf, UnauthorizedError } from "@/lib/owner";
-import { publicClient } from "@/lib/viem";
-import { addresses, JobContractAbi } from "@agentrail/shared";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { query } from "./db";
 
-/// Who may open the network admin views. Member 4.
+/// The administrator account. Member 4.
 ///
-/// Two ways in, and both are proved rather than claimed — the rule this codebase
-/// already lives by for ownership of an agent.
+/// A row in the database, not a value in the environment. An env credential
+/// cannot be changed without editing a file and restarting the server, has no
+/// record of when it was created or last used, and puts a password in plain text
+/// on disk next to variables that get pasted into terminals.
 ///
-/// The first is on chain and needs no configuration: `JobContract` has an owner,
-/// the account that deployed it. That owner is a real privilege in this system —
-/// it can re-point the identity registry, the evaluator module and the reputation
-/// registry, which is why it is deliberately never one of the agents. If a
-/// verified wallet on the signed-in account is that address, the person is
-/// administering the thing they own.
+/// Lives in its own `app` schema. The other two are spoken for: Ponder owns
+/// `public` and drops it on a configuration change, which would take the
+/// administrator with it, and `runtime` belongs to the agents. A third schema is
+/// cheaper than either of those mistakes.
 ///
-/// The second is an allowlist, because the deployer is a throwaway key nobody
-/// wants to sign in with day to day. `ADMIN_ALLOWLIST` holds Privy DIDs, email
-/// addresses or wallet addresses, comma separated. Server-side only: it is never
-/// sent to the browser, so the page cannot be talked into believing itself
-/// privileged.
+/// Passwords are stored as a scrypt hash with a per-row salt, so the table is not
+/// a list of passwords. Verification is constant-time.
 ///
-/// What this gate is, honestly: it controls the interface, not the data. Jobs
-/// and verdicts live on public contracts, and anyone willing to read the chain
-/// can reconstruct every job in these views without ever loading this
-/// application. What it does protect is the evaluator's written reasoning, which
-/// is stored off chain and served nowhere else.
+/// The session is a signed cookie rather than a stored row: an expiry and an HMAC
+/// over it, keyed by the account's own password hash. Nothing has to be cleaned
+/// up, and changing a password invalidates every session issued under the old one
+/// without needing a revocation list.
 ///
-/// With no Privy app configured the whole application runs on an unverified
-/// header for offline development, and there is nothing to authenticate against.
-/// This returns false in that case rather than true: an open demo should refuse
-/// the admin views, not hand them to everyone.
+/// Honest about strength. This gates an interface rather than a secret — jobs and
+/// verdicts are public on chain and reconstructible without this application. The
+/// exception is the evaluator's written reasoning, which is stored off chain and
+/// served nowhere else. There is no rate limiting.
 
-/// Two levels, and the difference between them is real rather than decorative.
-///
-///   admin       may read the network views — every job, and the evaluator's
-///               reasoning. Holds no power over the system itself.
-///   superadmin  owns the deployed contracts. That account can re-point the
-///               identity registry, the evaluator module and the reputation
-///               registry, which is to say it can rewrite the rules every future
-///               job is judged under. It is deliberately never one of the agents.
-///
-/// Superadmin implies admin. The reverse never holds: an allowlist is a decision
-/// this application makes, and the chain does not care what it says.
-export type AdminRole = "none" | "admin" | "superadmin";
+export const ADMIN_COOKIE = "agentrail_admin";
+
+/// Eight hours: long enough for a working session, short enough that a browser
+/// left open somewhere does not stay signed in indefinitely.
+const SESSION_SECONDS = 8 * 60 * 60;
+
+const SCRYPT_KEYLEN = 64;
+
+interface AdminRow {
+  email: string;
+  password_hash: string;
+}
+
+let schemaReady: Promise<void> | undefined;
+
+/// Created on first use rather than by a migration step, so a fresh clone needs
+/// no extra command before `admin:create` works.
+export function ensureAdminSchema(): Promise<void> {
+  schemaReady ??= (async () => {
+    await query(`CREATE SCHEMA IF NOT EXISTS app`);
+    await query(`
+      CREATE TABLE IF NOT EXISTS app.admin_user (
+        email         text        PRIMARY KEY,
+        password_hash text        NOT NULL,
+        created_at    timestamptz NOT NULL DEFAULT now(),
+        last_login_at timestamptz
+      )
+    `);
+  })();
+  return schemaReady;
+}
+
+/// `salt:derived`, both hex. Salted per row, so two administrators choosing the
+/// same password do not share a hash.
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const derived = scryptSync(password, salt, SCRYPT_KEYLEN);
+  return `${salt.toString("hex")}:${derived.toString("hex")}`;
+}
+
+export function passwordMatches(password: string, stored: string): boolean {
+  const [saltHex, expectedHex] = stored.split(":");
+  if (!saltHex || !expectedHex) return false;
+  let expected: Buffer;
+  try {
+    expected = Buffer.from(expectedHex, "hex");
+  } catch {
+    return false;
+  }
+  if (expected.length !== SCRYPT_KEYLEN) return false;
+  const actual = scryptSync(password, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN);
+  return timingSafeEqual(actual, expected);
+}
+
+export function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export async function createAdmin(email: string, password: string): Promise<void> {
+  await ensureAdminSchema();
+  await query(
+    `INSERT INTO app.admin_user (email, password_hash)
+          VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+    [normaliseEmail(email), hashPassword(password)],
+  );
+}
+
+export async function adminCount(): Promise<number> {
+  await ensureAdminSchema();
+  const rows = await query<{ count: string }>(`SELECT count(*)::text AS count FROM app.admin_user`);
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function findAdmin(email: string): Promise<AdminRow | undefined> {
+  await ensureAdminSchema();
+  const rows = await query<AdminRow>(
+    `SELECT email, password_hash FROM app.admin_user WHERE email = $1`,
+    [normaliseEmail(email)],
+  );
+  return rows[0];
+}
+
+/// Keyed by the stored hash, which is why a password change signs that account
+/// out everywhere without any extra bookkeeping.
+function sign(email: string, passwordHash: string, expiresAt: number): string {
+  return createHmac("sha256", passwordHash).update(`${email}:${expiresAt}`).digest("hex");
+}
+
+export interface Session {
+  value: string;
+  maxAge: number;
+}
+
+export async function issueSession(
+  email: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<Session | null> {
+  const row = await findAdmin(email);
+  if (!row) return null;
+  const expiresAt = nowSeconds + SESSION_SECONDS;
+  const mac = sign(row.email, row.password_hash, expiresAt);
+  // The email travels in the cookie so the signature can be checked against the
+  // right account's hash; it is signed over too, so it cannot be swapped.
+  //
+  // base64url, not encodeURIComponent. Its alphabet has no dot, so the delimiter
+  // stays unambiguous even though addresses contain them — and nothing here
+  // needs percent-escaping, which is what broke this first time round: the value
+  // was encoded here and encoded again by the cookie API, so `@` arrived as
+  // `%2540` and matched no account.
+  const value = `${Buffer.from(row.email).toString("base64url")}.${expiresAt}.${mac}`;
+  return { value, maxAge: SESSION_SECONDS };
+}
+
+export async function sessionEmail(
+  cookieValue: string | undefined,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<string | null> {
+  if (!cookieValue) return null;
+  const [rawEmail, rawExpiry, mac] = cookieValue.split(".");
+  if (!rawEmail || !rawExpiry || !mac) return null;
+
+  const expiresAt = Number(rawExpiry);
+  if (!Number.isInteger(expiresAt) || expiresAt <= nowSeconds) return null;
+
+  const email = Buffer.from(rawEmail, "base64url").toString("utf8");
+  const row = await findAdmin(email);
+  if (!row) return null;
+
+  const expected = sign(row.email, row.password_hash, expiresAt);
+  const a = Buffer.from(mac);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  return row.email;
+}
+
+export async function verifyCredentials(email: string, password: string): Promise<boolean> {
+  const row = await findAdmin(email);
+  if (!row) {
+    // Hash anyway, so a missing account and a wrong password take roughly the
+    // same time and the response does not say which it was.
+    scryptSync(password, randomBytes(16), SCRYPT_KEYLEN);
+    return false;
+  }
+  if (!passwordMatches(password, row.password_hash)) return false;
+  await query(`UPDATE app.admin_user SET last_login_at = now() WHERE email = $1`, [row.email]);
+  return true;
+}
+
+function cookieFrom(header: string | null, name: string): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return undefined;
+}
 
 export interface AdminCheck {
-  role: AdminRole;
-  /// Kept because most callers only ask "may I see this at all".
   admin: boolean;
+  email: string | null;
   /// Why, in words a person can act on. Shown to whoever was refused.
   reason: string;
 }
 
-function superAllowlist(): string[] {
-  return (process.env.SUPERADMIN_ALLOWLIST ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.length > 0);
-}
-
-function allowlist(): string[] {
-  return (process.env.ADMIN_ALLOWLIST ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.length > 0);
-}
-
-/// The account that deployed JobContract, read from the chain.
-///
-/// Read rather than configured, so it cannot drift from the contract that is
-/// actually deployed. A failure here denies rather than allows: a check that
-/// falls open when the endpoint is slow is not a check.
-async function contractOwner(): Promise<string | null> {
-  try {
-    const owner = await publicClient.readContract({
-      address: addresses.JobContract,
-      abi: JobContractAbi,
-      functionName: "owner",
-    });
-    return typeof owner === "string" ? owner.toLowerCase() : null;
-  } catch {
-    return null;
-  }
-}
-
-function decide(role: AdminRole, reason: string): AdminCheck {
-  return { role, admin: role !== "none", reason };
-}
-
 export async function checkAdmin(request: Request): Promise<AdminCheck> {
-  // With no Privy app configured the caller's identity is a header they wrote
-  // themselves, so an allowlist entry could simply be asserted. Refuse the whole
-  // section rather than hand it to whoever guesses a listed address.
-  if (!appId()) {
-    return decide(
-      "none",
-      "admin access needs a configured Privy app — identity cannot be verified without one",
-    );
-  }
-
-  let did: string | null;
   try {
-    did = await ownerOf(request);
-  } catch (err) {
-    if (err instanceof UnauthorizedError) {
-      return decide("none", "sign in to open the network admin views");
+    const email = await sessionEmail(cookieFrom(request.headers.get("cookie"), ADMIN_COOKIE));
+    if (email) {
+      return { admin: true, email, reason: "signed in as the administrator" };
     }
-    throw err;
+    if ((await adminCount()) === 0) {
+      return {
+        admin: false,
+        email: null,
+        reason: "no administrator exists yet — create one with: npm run admin:create",
+      };
+    }
+    return { admin: false, email: null, reason: "sign in with the administrator account" };
+  } catch (err) {
+    // A database that will not answer denies. A check that falls open when
+    // Postgres is down is not a check.
+    console.error("[admin] could not check the session", err);
+    return { admin: false, email: null, reason: "the administrator database is unavailable" };
   }
-  if (!did) {
-    return decide("none", "sign in to open the network admin views");
-  }
-
-  const identity = did.toLowerCase();
-  const admins = allowlist();
-  const supers = superAllowlist();
-
-  // Wallets come from the identity token, which not every session carries — a
-  // person signed in with an email alone has no wallet to compare.
-  let wallets: { address: `0x${string}` }[] = [];
-  try {
-    wallets = await verifiedWalletsOf(request);
-  } catch {
-    wallets = [];
-  }
-  const held = wallets.map((w) => w.address.toLowerCase());
-
-  // Ownership of the contracts outranks anything configured here, because it is
-  // the one claim this application does not get to make up.
-  const owner = await contractOwner();
-  if (owner && held.includes(owner)) {
-    return decide("superadmin", "this wallet owns the deployed contracts");
-  }
-  if (supers.includes(identity) || held.some((a) => supers.includes(a))) {
-    return decide("superadmin", "listed in SUPERADMIN_ALLOWLIST");
-  }
-  if (admins.includes(identity) || held.some((a) => admins.includes(a))) {
-    return decide("admin", "listed in ADMIN_ALLOWLIST");
-  }
-
-  return decide(
-    "none",
-    "this account does not own the deployed contracts and is on neither admin list",
-  );
 }

@@ -619,41 +619,51 @@ in a real one.
 ### 6.7 Network admin, and who may open it
 
 Four tabs, and three of them are yours: the Assistant, your Dashboard, the
-Marketplace. The fourth gathers the two views that are not yours — every job on
-the shared contracts, and every verdict the evaluator has reached — behind a
-check.
+Marketplace. The fourth gathers the two views that are not — every job on the
+shared contracts, every verdict the evaluator has reached, and how the contracts
+are wired — behind a sign-in.
 
-Two levels, and the difference is real rather than decorative.
+**One administrator account, in the database.** Create it with:
 
-- **Superadmin** is whoever owns the deployed contracts, read from the chain and
-  needing no configuration. That account can re-point the identity registry, the
-  evaluator module and the reputation registry, which is to say it can rewrite
-  the rules every future job is judged under — which is exactly why it is never
-  one of the agents. It additionally sees a read-only **Contracts** panel showing
-  what each of those is pointing at now, compared with what the deployment
-  recorded, so drift is visible rather than something to notice by accident.
-- **Admin** is an entry in `ADMIN_ALLOWLIST` (or `SUPERADMIN_ALLOWLIST`) in
-  `packages/web/.env` — a Privy DID or a wallet address, comma separated. It
-  reads the network views and holds no power over the system.
+```bash
+npm run admin:create -- admin@example.com 'a good password'
+```
 
-Empty lists mean nobody but the contract owner, which is the safe default. And
-with no Privy app configured at all, the check refuses everyone: in that mode a
-caller's identity is a header they wrote themselves, so a listed entry could
-simply be asserted.
+Re-running it for the same address sets a new password, which is also how a
+reset works. There is no registration and no recovery flow, because there is one
+account and building those would be a product nobody asked for.
 
-The decision is the server's. `lib/admin.ts` makes it, the routes behind each
-panel ask that same function, and the browser only receives the answer — so
-removing the gate in a browser buys an empty page rather than the data.
+The account lives in its own `app` schema. The other two are spoken for: Ponder
+drops `public` on a configuration change, which would take the administrator
+with it, and `runtime` belongs to the agents.
+
+**Passwords are stored as a scrypt hash with a per-row salt**, so the table is
+not a list of passwords, and verification is constant-time. The session is a
+signed cookie rather than a stored row — an expiry and an HMAC over it, keyed by
+the account's own password hash — so nothing needs cleaning up and a password
+change invalidates every session issued under the old one without a revocation
+list. The cookie is `HttpOnly`: the page that receives it cannot read it back.
+
+The decision is the server's. `lib/admin.ts` makes it, and every route behind
+those panels calls it — so deleting the gate in a browser buys an empty page
+rather than the data. Until an account exists, everything refuses.
 
 **What the gate is, honestly.** It organises the interface; it does not keep a
 secret. Jobs and verdicts live on public contracts, and anyone willing to read
 the chain can reconstruct them without ever loading this application. The one
 genuinely protected thing is the evaluator's written reasoning, which is stored
-off chain and served nowhere else — `/api/reviews` returns 403 to anyone who is
-not an admin.
+off chain and served nowhere else — `/api/reviews` returns 403 to anyone not
+signed in.
 
-Nothing here writes. Re-pointing a registry would need the deployer's key in a
-browser, and that key is the one thing in this system that can change the rules.
+It is also demo-grade, and worth saying so rather than being asked: there is no
+rate limiting, no second factor and no lockout. What it is proportionate to is
+keeping a marker's network views out of a visitor's way, not defending a service
+on the open internet.
+
+Nothing here writes to the chain. The Contracts panel reads what the deployed
+contracts point at now and compares it with what the deployment recorded, so
+drift is visible — but re-pointing a registry needs the deployer's key, and that
+key does not belong in a browser.
 
 ### 6.8 The web application
 
