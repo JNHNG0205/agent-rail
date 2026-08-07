@@ -7,8 +7,7 @@ import { SendModal } from '@/components/agentrail/send-modal'
 import { AssistantView } from './views/assistant-view'
 import { DashboardView } from './views/dashboard-view'
 import { RegistryView } from './views/registry-view'
-import { JobsView } from './views/jobs-view'
-import { EvaluatorView } from './views/evaluator-view'
+import { AdminView } from './views/admin-view'
 import { cn } from '@/lib/utils'
 
 export function AppShell() {
@@ -43,11 +42,8 @@ export function AppShell() {
         <div className={cn('rise rise-1', activeTab === 'registry' ? 'block' : 'hidden')}>
           <RegistryView />
         </div>
-        <div className={cn('rise rise-1', activeTab === 'jobs' ? 'block' : 'hidden')}>
-          <JobsView />
-        </div>
-        <div className={cn('rise rise-1', activeTab === 'evaluator' ? 'block' : 'hidden')}>
-          <EvaluatorView />
+        <div className={cn('rise rise-1', activeTab === 'admin' ? 'block' : 'hidden')}>
+          <AdminView />
         </div>
       </main>
 

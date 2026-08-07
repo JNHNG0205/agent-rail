@@ -282,7 +282,7 @@ ignored**, which looks identical to it having no effect.
 | `.env` | Hardhat, `preflight.ts` | RPC endpoint, deployer and agent keys |
 | `packages/agents/.env` | runtime, evaluator | chain, RPC, evaluator key **and address**, treasury key, LLM, database |
 | `packages/indexer/.env.local` | Ponder (**not** `.env`) | chain id, database, its own RPC |
-| `packages/web/.env` | Next.js | database, Privy, public endpoints |
+| `packages/web/.env` | Next.js | database, Privy, admin allowlists, public endpoints |
 
 ### 3.5 Why the indexer uses a different endpoint
 
@@ -616,12 +616,52 @@ the USDC would be bought rather than minted — `MockUSDC.mint` is deliberately
 unrestricted, which is acceptable for a test token and would be a critical flaw
 in a real one.
 
-### 6.7 The web application
+### 6.7 Network admin, and who may open it
 
-Five views: **Assistant** (talk to your agent, commission work, collect
-results), **Dashboard** (your agents, your escrow), **Agents & Registry** (the
-public marketplace), **Escrow Jobs** (every job and its state machine), and
-**Evaluator Suite** (verdicts and what they were graded against).
+Four tabs, and three of them are yours: the Assistant, your Dashboard, the
+Marketplace. The fourth gathers the two views that are not yours — every job on
+the shared contracts, and every verdict the evaluator has reached — behind a
+check.
+
+Two levels, and the difference is real rather than decorative.
+
+- **Superadmin** is whoever owns the deployed contracts, read from the chain and
+  needing no configuration. That account can re-point the identity registry, the
+  evaluator module and the reputation registry, which is to say it can rewrite
+  the rules every future job is judged under — which is exactly why it is never
+  one of the agents. It additionally sees a read-only **Contracts** panel showing
+  what each of those is pointing at now, compared with what the deployment
+  recorded, so drift is visible rather than something to notice by accident.
+- **Admin** is an entry in `ADMIN_ALLOWLIST` (or `SUPERADMIN_ALLOWLIST`) in
+  `packages/web/.env` — a Privy DID or a wallet address, comma separated. It
+  reads the network views and holds no power over the system.
+
+Empty lists mean nobody but the contract owner, which is the safe default. And
+with no Privy app configured at all, the check refuses everyone: in that mode a
+caller's identity is a header they wrote themselves, so a listed entry could
+simply be asserted.
+
+The decision is the server's. `lib/admin.ts` makes it, the routes behind each
+panel ask that same function, and the browser only receives the answer — so
+removing the gate in a browser buys an empty page rather than the data.
+
+**What the gate is, honestly.** It organises the interface; it does not keep a
+secret. Jobs and verdicts live on public contracts, and anyone willing to read
+the chain can reconstruct them without ever loading this application. The one
+genuinely protected thing is the evaluator's written reasoning, which is stored
+off chain and served nowhere else — `/api/reviews` returns 403 to anyone who is
+not an admin.
+
+Nothing here writes. Re-pointing a registry would need the deployer's key in a
+browser, and that key is the one thing in this system that can change the rules.
+
+### 6.8 The web application
+
+Four tabs: **Assistant** (talk to your agent, commission work, collect
+results), **Dashboard** (your agents, your escrow), **Marketplace** (who is
+selling what), and **Network admin** (every job, every verdict, and — for the
+contract owner — how the contracts are wired). The first three are yours; the
+fourth is the whole network, which is why it is behind a check.
 
 Results can be previewed, downloaded with a sensible filename, or copied. Each
 kind is served with its own content type and previewed accordingly, so a page
@@ -630,7 +670,7 @@ a `default-src 'none'` policy, because it is another agent's output.
 Several commissions can be watched at once, because agents genuinely work
 concurrently.
 
-### 6.8 The chain is the source of truth
+### 6.9 The chain is the source of truth
 
 PostgreSQL is a read cache. If the two disagree, the chain wins — and anything
 being actively watched reads the chain directly, so a lagging indexer slows

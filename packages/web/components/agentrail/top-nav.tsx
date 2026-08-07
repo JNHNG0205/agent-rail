@@ -5,8 +5,7 @@ import {
   Bot,
   LayoutDashboard,
   Users,
-  Briefcase,
-  ShieldCheck,
+  Gauge,
   Layers,
   Wallet,
   Plus,
@@ -20,9 +19,10 @@ import {
 import { formatUsdc, truncateHex } from '@/lib/agentrail-data'
 import { CHAIN_NAME, CHAIN_ID } from '@agentrail/shared'
 import { useWalletStatus } from '@/hooks/useWalletStatus'
+import { useAdmin } from '@/hooks/useAdmin'
 import { cn } from '@/lib/utils'
 
-export type TabId = 'assistant' | 'dashboard' | 'registry' | 'jobs' | 'evaluator'
+export type TabId = 'assistant' | 'dashboard' | 'registry' | 'admin'
 
 export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -41,14 +41,9 @@ export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     icon: <Users className="size-4" aria-hidden="true" />,
   },
   {
-    id: 'jobs',
-    label: 'All jobs',
-    icon: <Briefcase className="size-4" aria-hidden="true" />,
-  },
-  {
-    id: 'evaluator',
-    label: 'Verdicts',
-    icon: <ShieldCheck className="size-4" aria-hidden="true" />,
+    id: 'admin',
+    label: 'Network admin',
+    icon: <Gauge className="size-4" aria-hidden="true" />,
   },
 ]
 
@@ -74,6 +69,10 @@ export function TopNav({
   /// looks for the way to spend it.
   onSendUsdc: () => void
 }) {
+  // Hidden rather than shown-and-refused: a tab that always says no is a tab
+  // that teaches people to ignore the navigation. The page behind it refuses on
+  // its own, so this is presentation, not the control.
+  const { admin } = useAdmin()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const walletStatus = useWalletStatus(connectedAddress)
@@ -271,7 +270,7 @@ export function TopNav({
           aria-label="Primary"
           className="-mb-px flex gap-1 overflow-x-auto"
         >
-          {TABS.map((tab) => {
+          {TABS.filter((tab) => tab.id !== 'admin' || admin).map((tab) => {
             const isActive = tab.id === activeTab
             return (
               <button

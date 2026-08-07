@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { CHAIN_ID } from "@agentrail/shared";
+import { checkAdmin } from "@/lib/admin";
 
 /// GET /api/reviews — why each job settled or refunded. Member 4.
 ///
@@ -30,6 +31,11 @@ interface Row {
 }
 
 export async function GET(request: Request) {
+  const { admin, reason } = await checkAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: reason }, { status: 403 });
+  }
+
   const url = new URL(request.url);
   const raw = url.searchParams.get("limit");
   const parsed = raw === null ? DEFAULT_LIMIT : Number(raw);

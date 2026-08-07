@@ -18,7 +18,10 @@ export class UnauthorizedError extends Error {}
 /// Raised when an action needs to know a user's wallets and cannot.
 export class NoVerifiedWalletError extends Error {}
 
-function appId(): string {
+/// Exported so the admin gate can refuse outright when no app is configured.
+/// In that mode a caller's identity is an unverified header, which is fine for a
+/// local demo and is not a basis for granting privilege to anyone.
+export function appId(): string {
   // Read per call, not at module load: a value captured at import time is
   // whatever the process started with, which makes tests depend on load order.
   return process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
