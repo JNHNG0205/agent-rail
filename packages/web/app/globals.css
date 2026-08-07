@@ -97,28 +97,19 @@
     background-color: var(--paper);
   }
 
-  /* Atmosphere, not a flat fill. Two soft washes give the page a light source,
-   * and hairlines every 28px make it ruled paper — which is what a ledger is.
-   *
-   * Painted onto the body itself rather than a pseudo-element behind it: at
-   * z-index -1 the body's own background colour covered the lot and the page
-   * rendered flat. Fixed attachment keeps the rule lines still while content
-   * scrolls across them, so the paper stays paper.
+  /* Depth without texture. The ruled hairlines that were here read as
+   * stationery rather than infrastructure, so what is left is light: one cool
+   * wash falling from the masthead and a warmer one answering it from the
+   * right, both weak enough that no edge is visible. Fixed, so they behave like
+   * a light source rather than something printed on the page and scrolled.
    */
   body {
     @apply text-foreground antialiased;
     background-color: transparent;
     background-attachment: fixed;
     background-image:
-      radial-gradient(60rem 36rem at 10% -10%, rgba(16, 63, 58, 0.10), transparent 60%),
-      radial-gradient(46rem 32rem at 104% 4%, rgba(220, 75, 46, 0.07), transparent 58%),
-      repeating-linear-gradient(
-        to bottom,
-        rgba(11, 29, 26, 0.045) 0px,
-        rgba(11, 29, 26, 0.045) 1px,
-        transparent 1px,
-        transparent 28px
-      );
+      radial-gradient(72rem 40rem at 8% -14%, rgba(16, 63, 58, 0.08), transparent 58%),
+      radial-gradient(52rem 34rem at 106% 0%, rgba(220, 75, 46, 0.045), transparent 55%);
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
 
