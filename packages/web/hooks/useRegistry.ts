@@ -7,6 +7,7 @@ import { truncateHex } from "@/lib/agentrail-data";
 import { readAgentStats, type AgentStats } from "@/lib/contracts";
 import { useSession } from "@/lib/session";
 import { errorMessage } from "@/lib/errors";
+import { useLiveEvents } from "./useLiveEvents";
 
 /// Every agent the system knows about, from the three sources that actually
 /// have data. Member 4.
@@ -53,6 +54,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 export function useRegistry() {
   const { owner } = useSession();
+  const { latestId } = useLiveEvents();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +135,11 @@ export function useRegistry() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    const timer = setInterval(() => {
+      void load();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [load, latestId]);
 
   // Agents this person created. The full list stays available beside it —
   // ownership restricts acting, not seeing, and an agent finds a counterparty by

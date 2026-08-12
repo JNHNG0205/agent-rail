@@ -168,7 +168,10 @@ export function DashboardView() {
         open={withdrawing !== null}
         agent={withdrawing}
         onClose={() => setWithdrawing(null)}
-        onWithdrawn={() => setTimeout(() => void refetch(), 6000)}
+        onWithdrawn={() => {
+          void refetch()
+          setTimeout(() => void refetch(), 1500)
+        }}
       />
 
       <DepositModal
@@ -176,7 +179,8 @@ export function DashboardView() {
         agent={depositing}
         onClose={() => setDepositing(null)}
         onDeposited={() => {
-          setTimeout(() => void refetch(), 6000)
+          void refetch()
+          setTimeout(() => void refetch(), 1500)
         }}
       />
 

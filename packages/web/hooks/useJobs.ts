@@ -121,9 +121,13 @@ export function useJobs(options?: UseJobsOptions) {
     }
   }, [options?.jobId, options?.stateFilter, options?.agentAddress, options?.limit, fetchSingleJobOnChain]);
 
-  // Re-fetch on-chain state and API data automatically when new contract logs arrive
+  // Re-fetch on-chain state and API data automatically when new contract logs arrive or periodically
   useEffect(() => {
     fetchJobs();
+    const timer = setInterval(() => {
+      fetchJobs();
+    }, 4000);
+    return () => clearInterval(timer);
   }, [fetchJobs, latestId]);
 
   return {
