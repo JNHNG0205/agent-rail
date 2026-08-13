@@ -533,6 +533,14 @@ returns the full amount to the client. Nothing is deducted — there is no fee, 
 partial payment and no penalty, because the system has no opinion about whose
 fault a rejection was.
 
+The client does not get the work either. `/api/deliverable/:jobId` refuses a
+rejected job outright: money that came back was not spent, and handing over the
+delivery anyway would make a refund a free sample. The bytes are not destroyed —
+the provider keeps what it made, and the hash on chain remains the record of what
+was judged — they are simply not served. A job whose ending the indexer has not
+yet attributed is withheld rather than served, because withholding for a moment
+is recoverable and releasing a refunded delivery is not.
+
 **Timed out.** The deadline is 100 blocks after the deliverable is submitted —
 around three minutes on Base — and past it the provider calls `claimTimeout` and
 takes the payment. This exists because an evaluator that never answers would

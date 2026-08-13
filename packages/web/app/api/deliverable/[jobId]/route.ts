@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readJobOnChain } from "@/lib/contracts";
 import { runtimeUrl } from "@/lib/runtime";
 import { checkDeliverable } from "@/lib/deliverable";
+import { query } from "@/lib/db";
 
 /// GET /api/deliverable/:jobId — the finished work. Member 4.
 ///
@@ -10,6 +11,12 @@ import { checkDeliverable } from "@/lib/deliverable";
 /// bytes, and re-derives the hash before returning them — a deliverable that
 /// does not match what was committed on chain is not the work that was paid for,
 /// and must not be shown as if it were.
+///
+/// A rejected job is not served at all. When the evaluator refuses a delivery the
+/// escrow goes back to the client, and work that was paid back for is not work
+/// they bought — handing it over anyway would make the refund a free sample. The
+/// bytes still exist, because the hash on chain is the record of what was judged
+/// and the provider keeps what it made; they are simply not this route's to give.
 ///
 /// The job is read from the chain, not from the indexed cache, for two reasons.
 /// The hash decides whether provider-supplied bytes are shown at all, and
@@ -20,17 +27,23 @@ import { checkDeliverable } from "@/lib/deliverable";
 export const dynamic = "force-dynamic";
 
 /// readJobOnChain returns unknown — the ABI is cast at that boundary — so the
-/// shape is checked here rather than assumed. Only the two fields this route
-/// needs: who produced the work, and what hash was committed for it.
+/// shape is checked here rather than assumed. Only the fields this route needs:
+/// who produced the work, what hash was committed for it, and whether the job has
+/// ended — a job that ended may have ended in a refund.
 interface OnChainJob {
   provider: `0x${string}`;
   deliverableHash: `0x${string}` | null;
+  state: number;
 }
 
 function isOnChainJob(value: unknown): value is OnChainJob {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return typeof v.provider === "string" && v.provider.startsWith("0x");
+  return (
+    typeof v.provider === "string" &&
+    v.provider.startsWith("0x") &&
+    typeof v.state === "number"
+  );
 }
 
 interface DirectoryEntry {
@@ -62,6 +75,21 @@ const EXTENSIONS: Record<string, string> = {
   text: "txt",
 };
 
+/// Null when the indexer has no row, or the job has not ended.
+async function terminalOutcome(jobId: string): Promise<string | null> {
+  try {
+    const rows = await query<{ outcome: string | null }>(
+      `SELECT outcome FROM job WHERE id = $1`,
+      [jobId],
+    );
+    return rows[0]?.outcome ?? null;
+  } catch {
+    // A database that will not answer must not become a way to read a refunded
+    // deliverable, so this reports "unknown" and the caller withholds.
+    return null;
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { jobId: string } },
@@ -81,6 +109,30 @@ export async function GET(
       return NextResponse.json({ error: `no job ${params.jobId}` }, { status: 404 });
     }
     const job = onChain;
+
+    // Which of the three endings a Terminal job reached. The chain collapses
+    // them into one state and the events tell them apart, so this is the
+    // indexer's to answer.
+    const outcome = await terminalOutcome(params.jobId);
+
+    if (outcome === "cancelled") {
+      return NextResponse.json(
+        {
+          error:
+            "this job was rejected and the escrow refunded, so the work is not available",
+        },
+        { status: 403 },
+      );
+    }
+    // Terminal but unattributed: the indexer has not caught up, or never saw the
+    // job. Withholding for a moment is recoverable and self-healing; serving
+    // something that turns out to have been refunded is not.
+    if (job.state === 3 && outcome === null) {
+      return NextResponse.json(
+        { error: "waiting on the indexer to confirm how this job ended" },
+        { status: 409 },
+      );
+    }
     const directory = (await (await fetch(`${runtimeUrl()}/agents`, { cache: "no-store" })).json()) as
       | DirectoryEntry[]
       | { error: string };

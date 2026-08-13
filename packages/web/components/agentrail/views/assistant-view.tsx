@@ -131,7 +131,22 @@ function JobCard({
             <div className="mb-4" />
             <Progress stage={result.stage} outcome={result.outcome} />
 
-            {result.deliverableUrl && (
+            {result.outcome === "cancelled" && (
+              <div className="mt-4 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--state-refunded)]">
+                  <XCircle className="size-3.5" aria-hidden="true" />
+                  Rejected — your escrow was refunded in full
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  The evaluator judged this delivery against the terms the provider
+                  published and refused it, so the fee came back to your agent. The
+                  work is not yours to keep, because you did not pay for it. Ask
+                  again and your agent will commission it afresh.
+                </p>
+              </div>
+            )}
+
+            {result.outcome !== "cancelled" && result.deliverableUrl && (
               <div className="mt-4">
                 <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                   {result.outcome === "completed" ? (
