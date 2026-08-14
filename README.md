@@ -93,6 +93,8 @@ Prerequisites: Node 20+, Docker (for Postgres).
 
 **Setup is documented step by step in [`documentation.md`](./documentation.md)** —
 it covers the accounts, the keys and the faucets, and is the one to follow.
+For how the code works — the functions, the agent logic and the flow — see
+[`EXPLANATION.md`](./EXPLANATION.md).
 
 ```bash
 npm install                            # every workspace, from the root

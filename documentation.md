@@ -758,6 +758,11 @@ history without ever showing a job in the wrong state.
 
 ## 7. Components
 
+For the code-level companion to this section — every exported function, the logic
+each agent follows and the order the flow runs in — see
+[`EXPLANATION.md`](./EXPLANATION.md).
+
+
 ```
 packages/
   contracts/   the rules, on chain
