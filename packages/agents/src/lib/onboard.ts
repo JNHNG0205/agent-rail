@@ -1,6 +1,6 @@
 import { createWalletClient, http, formatEther, parseEther, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
+import { baseSepolia, hardhat } from "viem/chains";
 import {
   addresses,
   IdentityRegistryAbi,
@@ -96,36 +96,73 @@ export async function onboard(agent: AgentAccount, opts: OnboardOptions = {}): P
     args: [agent.address],
   });
 
-  // Registration and the USDC grant batch into one operation where the chain
-  // supports it, so a new agent costs a single round trip.
-  const calls = [];
-  if (!registered) {
-    calls.push({
-      to: addresses.IdentityRegistry,
-      abi: IdentityRegistryAbi as never,
-      functionName: "registerAgent",
-      args: [agent.address],
+  if (opts.treasuryKey) {
+    const treasury = privateKeyToAccount(opts.treasuryKey);
+    const wallet = createWalletClient({
+      account: treasury,
+      chain: isTestnet ? baseSepolia : hardhat,
+      transport: http(RPC_URL),
     });
-  }
 
-  if (opts.grantUsdc) {
-    const usdc = (await publicClient.readContract({
-      address: addresses.MockUSDC,
-      abi: MockUSDCAbi,
-      functionName: "balanceOf",
-      args: [agent.address],
-    })) as bigint;
-    if (usdc < USDC_GRANT / 2n) {
+    if (!registered) {
+      const hash = await wallet.writeContract({
+        address: addresses.IdentityRegistry,
+        abi: IdentityRegistryAbi,
+        functionName: "registerAgent",
+        args: [agent.address],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+    }
+
+    if (opts.grantUsdc) {
+      const usdc = (await publicClient.readContract({
+        address: addresses.MockUSDC,
+        abi: MockUSDCAbi,
+        functionName: "balanceOf",
+        args: [agent.address],
+      })) as bigint;
+      if (usdc < USDC_GRANT / 2n) {
+        const hash = await wallet.writeContract({
+          address: addresses.MockUSDC,
+          abi: MockUSDCAbi,
+          functionName: "mint",
+          args: [agent.address, USDC_GRANT],
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+    }
+  } else {
+    // Registration and the USDC grant batch into one operation where the chain
+    // supports it, so a new agent costs a single round trip.
+    const calls = [];
+    if (!registered) {
       calls.push({
-        to: addresses.MockUSDC,
-        abi: MockUSDCAbi as never,
-        functionName: "mint",
-        args: [agent.address, USDC_GRANT],
+        to: addresses.IdentityRegistry,
+        abi: IdentityRegistryAbi as never,
+        functionName: "registerAgent",
+        args: [agent.address],
       });
     }
-  }
 
-  if (calls.length > 0) await agent.send(calls);
+    if (opts.grantUsdc) {
+      const usdc = (await publicClient.readContract({
+        address: addresses.MockUSDC,
+        abi: MockUSDCAbi,
+        functionName: "balanceOf",
+        args: [agent.address],
+      })) as bigint;
+      if (usdc < USDC_GRANT / 2n) {
+        calls.push({
+          to: addresses.MockUSDC,
+          abi: MockUSDCAbi as never,
+          functionName: "mint",
+          args: [agent.address, USDC_GRANT],
+        });
+      }
+    }
+
+    if (calls.length > 0) await agent.send(calls);
+  }
 }
 
 /// One line describing an agent's readiness, for startup logs.
