@@ -106,30 +106,22 @@ async function smartAccountFor(
     // for every agent, until the endpoint started refusing with 429.
     ...(knownAddress ? { address: knownAddress } : {}),
   });
-  // Alchemy serves the bundler on the same endpoint, so no second URL is needed.
-  // The fallback, not the configured endpoint alone. A bundler client does not
-  // only bundle: it reads blocks and estimates gas over the same transport, and
-  // those are ordinary reads the public endpoint answers perfectly well. Keeping
-  // it on one endpoint meant a rate limit on a block read failed the whole
-  // operation. eth_sendUserOperation still effectively requires the configured
-  // endpoint — the public pool does not implement it — so a fallback there
-  // reports "rpc method is unsupported" rather than the underlying 429, which is
-  // worth knowing when reading an error from this path.
-  const bundler = createBundlerClient({ account, client: publicClient, transport: readTransport });
+  // Alchemy serves the bundler on the configured RPC endpoint.
+  // We use rpcTransport directly so bundler methods (eth_sendUserOperation,
+  // eth_getUserOperationReceipt) are never routed to the public fallback endpoint
+  // which does not implement bundler RPC methods.
+  const bundler = createBundlerClient({ account, client: publicClient, transport: rpcTransport });
 
   return {
     address: account.address,
     owner: owner.address,
     async send(calls) {
       const hash = await bundler.sendUserOperation({ calls });
-      // A generous timeout, because a bundler is a queue and not a chain. viem's
-      // default gave up while operations were still pending on Base Sepolia, and
-      // the caller then treated a slow success as a failure — two agents were
-      // reported as failing to register, and both turned out to be registered.
+      // A generous timeout, because a bundler is a queue and not a chain.
       const receipt = await bundler.waitForUserOperationReceipt({
         hash,
-        timeout: 120_000,
-        pollingInterval: 2_000,
+        timeout: 180_000,
+        pollingInterval: 3_000,
       });
       if (!receipt.success) {
         throw new Error(`user operation reverted (tx ${receipt.receipt.transactionHash})`);
