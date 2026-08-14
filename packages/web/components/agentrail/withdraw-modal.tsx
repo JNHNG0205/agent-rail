@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Loader2, Wallet } from "lucide-react";
-import { formatUsdc as exactUsdc, parseUsdc } from "@agentrail/shared";
-import { formatUsdc, truncateHex } from "@/lib/agentrail-data";
+import { parseUsdc } from "@agentrail/shared";
+import { exactUsdcAmount, formatUsdc, truncateHex } from "@/lib/agentrail-data";
 import { Button } from "@/ui/button";
 import { useAuthedFetch } from "@/lib/session";
 import type { Agent } from "@/lib/agentrail-data";
@@ -58,7 +58,7 @@ export function WithdrawModal({ open, agent, onClose, onWithdrawn }: Props) {
     setError(null);
     setSent(null);
     // The whole balance is the common case; anything less is a deliberate act.
-    setAmount(agent.usdcBalance !== undefined ? exactUsdc(agent.usdcBalance) : "");
+    setAmount(agent.usdcBalance !== undefined ? exactUsdcAmount(agent.usdcBalance) : "");
     let cancelled = false;
     void authedFetch("/api/wallet/linked")
       .then((r) => r.json())

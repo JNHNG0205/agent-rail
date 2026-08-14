@@ -90,6 +90,19 @@ export function truncateHex(hex?: string, start = 6, end = 4): string {
 /// parseUsdc and a rounded figure would quietly move less money than intended.
 /// Anything that feeds a value back into a transaction must use the exact
 /// six-decimal formatter from shared, never this one.
+/// The exact amount, with nothing decorative on the end.
+///
+/// Prefilled into the fields that spend money, where the two-place display
+/// figure would be wrong: withdrawing a truncated balance leaves fractions
+/// behind that the person asked to move. What it drops is only trailing zeros —
+/// 50.000000 becomes 50, and 21.500000 becomes 21.5 — so the value still parses
+/// to the same integer minor units it came from.
+export function exactUsdcAmount(minorUnits: bigint): string {
+  const whole = minorUnits / 1_000_000n;
+  const fraction = (minorUnits % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraction.length > 0 ? `${whole}.${fraction}` : `${whole}`;
+}
+
 export function formatUsdc(amount?: number | bigint): string {
   if (amount === undefined) return "0.00";
   const minorUnits = typeof amount === "bigint" ? amount : BigInt(Math.round(amount * 1e6));

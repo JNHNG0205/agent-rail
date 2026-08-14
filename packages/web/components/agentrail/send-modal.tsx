@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { getAddress, isAddress } from "viem";
 import { Loader2, Send, TriangleAlert } from "lucide-react";
-import { formatUsdc as exactUsdc, parseUsdc } from "@agentrail/shared";
-import { formatUsdc } from "@/lib/agentrail-data";
+import { parseUsdc } from "@agentrail/shared";
+import { exactUsdcAmount, formatUsdc } from "@/lib/agentrail-data";
 import { Button } from "@/ui/button";
 import { useSendUsdc } from "@/hooks/useSendUsdc";
 import { useSession } from "@/lib/session";
@@ -216,7 +216,7 @@ export function SendModal({ open, onClose }: Props) {
                   <button
                     type="button"
                     // The exact balance, never the rounded display value.
-                    onClick={() => setAmount(exactUsdc(balance))}
+                    onClick={() => setAmount(exactUsdcAmount(balance))}
                     className="text-primary hover:underline"
                   >
                     Use all

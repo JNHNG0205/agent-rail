@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ArrowDownLeft, Loader2, Wallet } from "lucide-react";
-import { formatUsdc as exactUsdc, parseUsdc } from "@agentrail/shared";
-import { formatUsdc } from "@/lib/agentrail-data";
+import { parseUsdc } from "@agentrail/shared";
+import { exactUsdcAmount, formatUsdc } from "@/lib/agentrail-data";
 import { Button } from "@/ui/button";
 import { useSendUsdc } from "@/hooks/useSendUsdc";
 import { useSession } from "@/lib/session";
@@ -158,7 +158,7 @@ export function DepositModal({ open, agent, onClose, onDeposited }: Props) {
                     type="button"
                     // The exact balance, not the rounded one — "Use all" that
                     // leaves fractions behind is not what it says.
-                    onClick={() => setAmount(exactUsdc(balance))}
+                    onClick={() => setAmount(exactUsdcAmount(balance))}
                     className="text-primary hover:underline"
                   >
                     Use all

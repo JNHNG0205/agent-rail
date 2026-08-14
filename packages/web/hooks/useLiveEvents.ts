@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatUsdc, type ChainEvent } from "@agentrail/shared";
+import type { ChainEvent } from "@agentrail/shared";
+import { formatUsdc } from "@/lib/agentrail-data";
 
 /// The event feed, read from the indexer rather than the chain. Member 4.
 ///
